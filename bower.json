@@ -1,0 +1,39 @@
+{
+  "name": "angular-store",
+  "version": "0.1.0",
+  "authors": [
+    "Colin Bellino <bellino.colin@gmail.com>"
+  ],
+  "description": "Angular plugin to handle data persistence à la Ember Data",
+  "main": "./dist/angular-store.js",
+  "keywords": [
+    "angular",
+    "plugin",
+    "data",
+    "ember",
+    "store",
+    "localstorage",
+    "rest",
+    "angular"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/cbellino/angular-store",
+  "ignore": [
+    "src",
+    "node_modules",
+    "bower_components",
+    "package.json",
+    "README.md"
+  ],
+  "dependencies": {
+    "angular": ">= 1.0.0",
+    "pluralize": "~1.0.1",
+    "lodash": "~2.4.1",
+    "restangular": "~1.4.0",
+    "underscore.string": "~2.3.3",
+    "angular-localforage": "~0.2.9"
+  },
+  "resolutions": {
+    "angular": "1.2.19"
+  }
+}

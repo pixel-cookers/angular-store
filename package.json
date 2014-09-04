@@ -1,0 +1,32 @@
+{
+  "name": "angular-store",
+  "version": "0.1.0",
+  "description": "Angular plugin to handle data persistence à la Ember Data",
+  "main": "./dist/angular-store.js",
+  "minified": "./dist/angular-store.min.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cbellino/angular-store.git"
+  },
+  "keywords": ["angular","plugin","data","ember","store","localstorage","rest","angular"],
+  "author": "Colin Bellino <bellino.colin@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cbellino/angular-store/issues"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "coffee-script": "^1.7.1",
+    "grunt": "^0.4.1",
+    "grunt-concurrent": "^0.5.0",
+    "grunt-contrib-clean": "^0.5.0",
+    "grunt-contrib-coffee": "^0.10.1",
+    "grunt-contrib-concat": "^0.4.0",
+    "grunt-contrib-uglify": "^0.4.0",
+    "grunt-contrib-watch": "^0.6.1",
+    "grunt-newer": "^0.7.0",
+    "grunt-ngmin": "^0.0.3",
+    "load-grunt-tasks": "^0.4.0",
+    "time-grunt": "^0.3.1"
+  }
+}
