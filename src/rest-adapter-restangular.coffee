@@ -28,7 +28,10 @@ angular
 
         if operation is 'get'
           singularKey = pluralize(what, 1)
+
           if data and data[singularKey]
             newResponse = data[singularKey]
+
+        newResponse.originalResponse = response.data
 
         newResponse

@@ -27,7 +27,17 @@ angular.module('store.localForage', [
 
 		# Return an array of records filtered by the given query
 		findQuery = (type, query) ->
-			console.log 'findQuery', query
+			deferred = $q.defer()
+
+			$localForage.getItem(type).then (records) ->
+				filteredRecords = _.filter(records, query)
+
+				if filteredRecords
+					deferred.resolve(filteredRecords)
+				else
+					deferred.reject('not_found')
+
+			deferred.promise
 
 		# Return an array of records filtered by their ids
 		findByIds = (type, ids) ->

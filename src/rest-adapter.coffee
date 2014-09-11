@@ -19,8 +19,20 @@ angular
 		'store.rest.restangular'
 	])
 
+	 # Remove all Restangular/AngularJS added methods in order to use Jasmine toEqual between
+	 # the retrieve resource and the model
+	.factory 'sanitizeRestangularOne', () ->
+  	(item) ->
+    	_.omit item, 'route', 'parentResource', 'getList', 'get', 'post', 'put', 'remove', 'head',
+    		'trace', 'options', 'patch', '$then', '$resolved', 'restangularCollection',
+    		'customOperation', 'customGET', 'customPOST', 'customPUT', 'customDELETE', 'customGETLIST',
+    		'$getList', '$resolved', 'restangularCollection', 'one', 'all', 'doGET', 'doPOST', 'doPUT',
+    		'doDELETE', 'doGETLIST', 'addRestangularMethod', 'getRestangularUrl', 'several',
+    		'getRequestedUrl', 'clone', 'reqParams', 'withHttpConfig', 'oneUrl', 'allUrl',
+    		'getParentList', 'save', 'fromServer', 'plain', 'singleOne'
+
 	# TODO: inject pluralize
-	.factory 'RESTAdapter', (RESTAdapterRestangular) ->
+	.factory 'RESTAdapter', (RESTAdapterRestangular, sanitizeRestangularOne, $q) ->
 
 		# Return an array of all the records
 		findAll = (type) ->
@@ -32,7 +44,22 @@ angular
 
 		# Return one record found by his `id` property
 		findById = (type, id) ->
-			RESTAdapterRestangular.one(pluralize(type), id).get()
+			deferred = $q.defer()
+
+			RESTAdapterRestangular.one(pluralize(type), id).get().then (record) ->
+
+				# TODO: do this into a separate function so we can choose to not side load relationships
+				for propertyName of sanitizeRestangularOne(record)
+					if _.include(propertyName, '_ids')
+						if record.originalResponse
+							pluralizedPropertyName = pluralize(propertyName.replace('_ids', ''))
+
+							if record.originalResponse[pluralizedPropertyName]
+								record[pluralizedPropertyName] = record.originalResponse[pluralizedPropertyName]
+
+				deferred.resolve(record)
+
+			deferred.promise
 
 		# Create a record
 		createRecord = (type, record) ->
