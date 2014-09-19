@@ -465,7 +465,7 @@
           var deferred, model;
           model = $injector.get(_.str.classify(type) + 'Model');
           deferred = $q.defer();
-          deferred.resolve(new model());
+          deferred.resolve(new model(null, type));
           return deferred.promise;
         },
         find: function(type, id) {
@@ -487,7 +487,7 @@
           deferred = $q.defer();
           adapter.findAll(type).then(function(records) {
             records = _.map(records, function(record) {
-              return new model(record);
+              return new model(record, type);
             });
             return deferred.resolve(records);
           });
@@ -499,7 +499,7 @@
           deferred = $q.defer();
           adapter.findQuery(type, query).then(function(records) {
             records = _.map(records, function(record) {
-              return new model(record);
+              return new model(record, type);
             });
             return deferred.resolve(records);
           });
@@ -513,7 +513,7 @@
           deferred = $q.defer();
           adapter.findByIds(type, ids).then(function(records) {
             records = _.map(records, function(record) {
-              return new model(record);
+              return new model(record, type);
             });
             return deferred.resolve(records);
           });
@@ -527,7 +527,7 @@
           adapter.findBy(type, propertyName, value).then(function(record) {
             var model;
             model = $injector.get(_.str.classify(type) + 'Model');
-            record = new model(record);
+            record = new model(record, type);
             return deferred.resolve(record);
           });
           return deferred.promise;
@@ -540,7 +540,7 @@
           adapter.findById(type, id).then(function(record) {
             var model;
             model = $injector.get(_.str.classify(type) + 'Model');
-            record = new model(record);
+            record = new model(record, type);
             return deferred.resolve(record);
           });
           return deferred.promise;

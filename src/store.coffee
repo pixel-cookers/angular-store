@@ -31,7 +31,7 @@ angular
 				model = $injector.get(_.str.classify(type) + 'Model')
 				deferred = $q.defer()
 
-				deferred.resolve(new model())
+				deferred.resolve(new model(null, type))
 
 				deferred.promise
 
@@ -57,7 +57,7 @@ angular
 
 				adapter.findAll(type).then (records) ->
 					records = _.map records, (record) ->
-						new model(record)
+						new model(record, type)
 
 					deferred.resolve(records)
 
@@ -69,7 +69,7 @@ angular
 
 				adapter.findQuery(type, query).then (records) ->
 					records = _.map records, (record) ->
-						new model(record)
+						new model(record, type)
 
 					deferred.resolve(records)
 
@@ -83,7 +83,7 @@ angular
 
 				adapter.findByIds(type, ids).then (records) ->
 					records = _.map records, (record) ->
-						new model(record)
+						new model(record, type)
 
 					deferred.resolve(records)
 
@@ -96,7 +96,7 @@ angular
 
 				adapter.findBy(type, propertyName, value).then (record) ->
 					model = $injector.get(_.str.classify(type) + 'Model')
-					record = new model(record)
+					record = new model(record, type)
 					deferred.resolve(record)
 
 				deferred.promise
@@ -108,7 +108,7 @@ angular
 
 				adapter.findById(type, id).then (record) ->
 					model = $injector.get(_.str.classify(type) + 'Model')
-					record = new model(record)
+					record = new model(record, type)
 					deferred.resolve(record)
 
 				deferred.promise
