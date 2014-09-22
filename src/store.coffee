@@ -76,6 +76,9 @@ angular
 				deferred.promise
 
 			findByIds: (type, ids) ->
+				if not ids
+					console.error 'ids parameter required'
+
 				model = $injector.get(_.str.classify(type) + 'Model')
 				adapterClass = $injector.get(_.str.classify(type) + 'Adapter')
 				adapter = new adapterClass
@@ -102,6 +105,9 @@ angular
 				deferred.promise
 
 			findById: (type, id) ->
+				if not id
+					console.error 'id parameter required'
+
 				adapterClass = $injector.get(_.str.classify(type) + 'Adapter')
 				adapter = new adapterClass
 				deferred = $q.defer()

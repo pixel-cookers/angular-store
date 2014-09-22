@@ -426,6 +426,10 @@
         return findById(type, id);
       };
 
+      LocalForageAdapter.prototype.findQuery = function(type, query) {
+        return findQuery(type, query);
+      };
+
       LocalForageAdapter.prototype.createRecord = function(type, record) {
         return createRecord(type, record);
       };
@@ -507,6 +511,9 @@
         },
         findByIds: function(type, ids) {
           var adapterClass, deferred, model;
+          if (!ids) {
+            console.error('ids parameter required');
+          }
           model = $injector.get(_.str.classify(type) + 'Model');
           adapterClass = $injector.get(_.str.classify(type) + 'Adapter');
           adapter = new adapterClass;
@@ -534,6 +541,9 @@
         },
         findById: function(type, id) {
           var adapterClass, deferred;
+          if (!id) {
+            console.error('id parameter required');
+          }
           adapterClass = $injector.get(_.str.classify(type) + 'Adapter');
           adapter = new adapterClass;
           deferred = $q.defer();

@@ -80,6 +80,8 @@ angular
 				findByIds(type, ids)
 			findById: (type, id) ->
 				findById(type, id)
+			findQuery: (type, query) ->
+				findQuery(type, query)
 			createRecord: (type, record) ->
 				createRecord(type, record)
 			deleteRecord: (type, record) ->
