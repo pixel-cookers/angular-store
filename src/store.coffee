@@ -27,11 +27,12 @@ angular
 
 		@$get = ($injector, $q) ->
 
-			new: (type) ->
+			new: (type, record) ->
 				model = $injector.get(_.str.classify(type) + 'Model')
 				deferred = $q.defer()
+				console.log record
 
-				deferred.resolve(new model(null, type))
+				deferred.resolve(new model(record, type))
 
 				deferred.promise
 
@@ -60,6 +61,9 @@ angular
 						new model(record, type)
 
 					deferred.resolve(records)
+
+				, (error) ->
+					deferred.reject(error)
 
 				deferred.promise
 
@@ -90,6 +94,9 @@ angular
 
 					deferred.resolve(records)
 
+				, (error) ->
+					deferred.reject(error)
+
 				deferred.promise
 
 			findBy: (type, propertyName, value) ->
@@ -100,7 +107,11 @@ angular
 				adapter.findBy(type, propertyName, value).then (record) ->
 					model = $injector.get(_.str.classify(type) + 'Model')
 					record = new model(record, type)
+
 					deferred.resolve(record)
+
+				, (error) ->
+					deferred.reject(error)
 
 				deferred.promise
 
@@ -115,7 +126,11 @@ angular
 				adapter.findById(type, id).then (record) ->
 					model = $injector.get(_.str.classify(type) + 'Model')
 					record = new model(record, type)
+
 					deferred.resolve(record)
+
+				, (error) ->
+					deferred.reject(error)
 
 				deferred.promise
 

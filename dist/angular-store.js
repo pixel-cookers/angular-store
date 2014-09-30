@@ -465,11 +465,12 @@
     adapterName = null;
     this.$get = function($injector, $q) {
       return {
-        "new": function(type) {
+        "new": function(type, record) {
           var deferred, model;
           model = $injector.get(_.str.classify(type) + 'Model');
           deferred = $q.defer();
-          deferred.resolve(new model(null, type));
+          console.log(record);
+          deferred.resolve(new model(record, type));
           return deferred.promise;
         },
         find: function(type, id) {
@@ -494,6 +495,8 @@
               return new model(record, type);
             });
             return deferred.resolve(records);
+          }, function(error) {
+            return deferred.reject(error);
           });
           return deferred.promise;
         },
@@ -523,6 +526,8 @@
               return new model(record, type);
             });
             return deferred.resolve(records);
+          }, function(error) {
+            return deferred.reject(error);
           });
           return deferred.promise;
         },
@@ -536,6 +541,8 @@
             model = $injector.get(_.str.classify(type) + 'Model');
             record = new model(record, type);
             return deferred.resolve(record);
+          }, function(error) {
+            return deferred.reject(error);
           });
           return deferred.promise;
         },
@@ -552,6 +559,8 @@
             model = $injector.get(_.str.classify(type) + 'Model');
             record = new model(record, type);
             return deferred.resolve(record);
+          }, function(error) {
+            return deferred.reject(error);
           });
           return deferred.promise;
         },
