@@ -2,12 +2,12 @@
 
 angular
 
-	.module('store', [
-		'store.core'
-		'store.localForage'
-		'store.rest'
-		'store.fileSystem'
-	])
+  .module('store', [
+    'store.core'
+    'store.localForage'
+    'store.rest'
+    'store.fileSystem'
+  ])
 
 ###*
  # @ngdoc provider
@@ -18,140 +18,222 @@ angular
 ###
 angular
 
-	.module('store.core', [])
+  .module('store.core', [])
 
-	# TODO: inject lodash + underscore.string
-	.provider 'Store', ->
-		adapter = null
-		adapterName = null
+  # TODO: inject lodash + underscore.string
+  .provider 'Store', ->
+    adapter = null
+    adapterName = null
 
-		@$get = ($injector, $q) ->
+    @$get = ($injector, $q) ->
 
-			new: (type, record) ->
-				model = $injector.get(_.str.classify(type) + 'Model')
-				deferred = $q.defer()
-				console.log record
+      new: (type, record) ->
+        deferred = $q.defer()
 
-				deferred.resolve(new model(record, type))
+        modelName = _.str.classify(type) + 'Model'
 
-				deferred.promise
+        if $injector.has(modelName)
+          model = $injector.get modelName
 
-			find: (type, id) ->
-				# TODO: find a way to not repeat this every time
-				adapterClass = $injector.get(_.str.classify(type) + 'Adapter')
-				adapter = new adapterClass
+          deferred.resolve(new model(record, type))
 
-				if arguments.length is 1
-					return @findAll(type)
+        else
+          deferred.reject('invalid_model')
 
-				if typeof(id) is 'object'
-					return @findQuery(type, id)
+        deferred.promise
 
-				# cast the id into an integer if we can
-				id = parseInt(id, 10) || id
+      find: (type, id) ->
+        # TODO: find a way to not repeat this every time
+        adapterName = _.str.classify(type) + 'Adapter'
 
-				@findById(type, id)
+        unless $injector.has adapterName
+          console.error 'invalid_adapter'
 
-			findAll: (type) ->
-				model = $injector.get(_.str.classify(type) + 'Model')
-				deferred = $q.defer()
+        adapterClass = $injector.get adapterName
+        adapter = new adapterClass
 
-				adapter.findAll(type).then (records) ->
-					records = _.map records, (record) ->
-						new model(record, type)
+        if arguments.length is 1
+          return @findAll(type)
 
-					deferred.resolve(records)
+        if typeof(id) is 'object'
+          return @findQuery(type, id)
 
-				, (error) ->
-					deferred.reject(error)
+        # cast the id into an integer if we can
+        id = parseInt(id, 10) || id
 
-				deferred.promise
+        @findById(type, id)
 
-			findQuery: (type, query) ->
-				model = $injector.get(_.str.classify(type) + 'Model')
-				deferred = $q.defer()
+      findAll: (type) ->
+        deferred = $q.defer()
 
-				adapter.findQuery(type, query).then (records) ->
-					records = _.map records, (record) ->
-						new model(record, type)
+        modelName = _.str.classify(type) + 'Model'
 
-					deferred.resolve(records)
+        if $injector.has(modelName)
+          model = $injector.get modelName
 
-				deferred.promise
+          adapter.findAll(type).then (records) ->
+            records = _.map records, (record) ->
+              new model(record, type)
 
-			findByIds: (type, ids) ->
-				if not ids
-					console.error 'ids parameter required'
+            deferred.resolve(records)
 
-				model = $injector.get(_.str.classify(type) + 'Model')
-				adapterClass = $injector.get(_.str.classify(type) + 'Adapter')
-				adapter = new adapterClass
-				deferred = $q.defer()
+          , (error) ->
+            deferred.reject(error)
 
-				adapter.findByIds(type, ids).then (records) ->
-					records = _.map records, (record) ->
-						new model(record, type)
+        else
+          deferred.reject('invalid_model')
 
-					deferred.resolve(records)
+        deferred.promise
 
-				, (error) ->
-					deferred.reject(error)
+      findQuery: (type, query) ->
+        deferred = $q.defer()
 
-				deferred.promise
+        modelName = _.str.classify(type) + 'Model'
 
-			findBy: (type, propertyName, value) ->
-				adapterClass = $injector.get(_.str.classify(type) + 'Adapter')
-				adapter = new adapterClass
-				deferred = $q.defer()
+        if $injector.has(modelName)
+          model = $injector.get modelName
 
-				adapter.findBy(type, propertyName, value).then (record) ->
-					model = $injector.get(_.str.classify(type) + 'Model')
-					record = new model(record, type)
+          adapter.findQuery(type, query).then (records) ->
+            records = _.map records, (record) ->
+              new model(record, type)
 
-					deferred.resolve(record)
+            deferred.resolve(records)
 
-				, (error) ->
-					deferred.reject(error)
+        else
+          deferred.reject('invalid_model')
 
-				deferred.promise
+        deferred.promise
 
-			findById: (type, id) ->
-				if not id
-					console.error 'id parameter required'
+      findByIds: (type, ids) ->
+        if not ids
+          console.error 'ids parameter required'
 
-				adapterClass = $injector.get(_.str.classify(type) + 'Adapter')
-				adapter = new adapterClass
-				deferred = $q.defer()
+        modelName = _.str.classify(type) + 'Model'
 
-				adapter.findById(type, id).then (record) ->
-					model = $injector.get(_.str.classify(type) + 'Model')
-					record = new model(record, type)
+        if $injector.has(modelName)
+          model = $injector.get(modelName)
 
-					deferred.resolve(record)
+          adapterName = _.str.classify(type) + 'Adapter'
 
-				, (error) ->
-					deferred.reject(error)
+          if $injector.has(adapterName)
+            adapterClass = $injector.get adapterName
+            adapter = new adapterClass
+            deferred = $q.defer()
 
-				deferred.promise
+            adapter.findByIds(type, ids).then (records) ->
+              records = _.map records, (record) ->
+                new model(record, type)
 
-			createRecord: (type, record) ->
-				adapterClass = $injector.get(_.str.classify(type) + 'Adapter')
-				adapter = new adapterClass
-				adapter.createRecord(type, record)
+              deferred.resolve(records)
 
-			# TODO: remove the type parameter since we can get it from the record
-			deleteRecord: (type, record) ->
-				adapterClass = $injector.get(_.str.classify(type) + 'Adapter')
-				adapter = new adapterClass
-				adapter.deleteRecord(type, record)
+            , (error) ->
+              deferred.reject(error)
 
-			saveRecord: (record) ->
-				className = record.constructor.name
-				className = className.replace('Model', '')
-				type = _.str.underscored(className)
-				adapterClass = $injector.get("#{className}Adapter")
-				adapter = new adapterClass
+          else
+            deferred.reject('invalid_adapter')
 
-				adapter.saveRecord(type, record)
+        else
+          deferred.reject('invalid_model')
 
-		return
+        deferred.promise
+
+      findBy: (type, propertyName, value) ->
+        deferred = $q.defer()
+        adapterName = _.str.classify(type) + 'Adapter'
+
+        if $injector.has adapterName
+          adapterClass = $injector.get adapterName
+          adapter = new adapterClass
+
+          adapter.findBy(type, propertyName, value).then (record) ->
+            modelName = _.str.classify(type) + 'Model'
+
+            if $injector.has(modelName)
+              model = $injector.get modelName
+              record = new model(record, type)
+
+              deferred.resolve(record)
+
+            else
+              deferred.reject('invalid_model')
+
+          , (error) ->
+            deferred.reject(error)
+
+        else
+          deferred.reject('invalid_adapter')
+
+        deferred.promise
+
+      findById: (type, id) ->
+        unless id
+          console.error 'id parameter required'
+
+        deferred = $q.defer()
+        adapterName = _.str.classify(type) + 'Adapter'
+
+        if $injector.has(adapterName)
+          adapterClass = $injector.get adapterName
+          adapter = new adapterClass
+
+          adapter.findById(type, id).then (record) ->
+            modelName = _.str.classify(type) + 'Model'
+
+            if $injector.has(modelName)
+              model = $injector.get modelName
+              record = new model(record, type)
+
+              deferred.resolve(record)
+
+            else
+              deferred.reject('invalid_model')
+
+          , (error) ->
+            deferred.reject(error)
+
+        else
+          deferred.reject('invalid_adapter')
+
+        deferred.promise
+
+      createRecord: (type, record) ->
+        adapterName = _.str.classify(type) + 'Adapter'
+
+        if $injector.has(adapterName)
+          adapterClass = $injector.get adapterName
+          adapter = new adapterClass
+          adapter.createRecord(type, record)
+
+        else
+          console.error('invalid_adapter')
+
+      # TODO: remove the type parameter since we can get it from the record
+      deleteRecord: (type, record) ->
+        adapterName = _.str.classify(type) + 'Adapter'
+
+        if $injector.has(adapterName)
+          adapterClass = $injector.get adapterName
+          adapter = new adapterClass
+          adapter.deleteRecord(type, record)
+
+        else
+          console.error('invalid_adapter')
+
+      saveRecord: (record) ->
+        className = record.constructor.name
+        className = className.replace('Model', '')
+
+        type = _.str.underscored(className)
+
+        adapterName = "#{className}Adapter"
+
+        if $injector.has(adapterName)
+          adapterClass = $injector.get adapterName
+          adapter = new adapterClass
+
+          adapter.saveRecord(type, record)
+
+        else
+          console.error('invalid_adapter')
+
+    return
