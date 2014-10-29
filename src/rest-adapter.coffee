@@ -9,80 +9,93 @@
 ###
 angular
 
-	.module('store.rest', [
-		'store.rest.core'
-		'store.rest.restangular'
-	])
+  .module('store.rest', [
+    'store.rest.core'
+    'store.rest.restangular'
+  ])
 
 angular
-	.module('store.rest.core', [
-		'store.rest.restangular'
-	])
+  .module('store.rest.core', [
+    'store.rest.restangular'
+    'store.core.sanitizeRestangularOne'
+  ])
 
-	 # Remove all Restangular/AngularJS added methods in order to use Jasmine toEqual between
-	 # the retrieve resource and the model
-	.factory 'sanitizeRestangularOne', () ->
-  	(item) ->
-    	_.omit item, 'route', 'parentResource', 'getList', 'get', 'post', 'put', 'remove', 'head',
-    		'trace', 'options', 'patch', '$then', '$resolved', 'restangularCollection',
-    		'customOperation', 'customGET', 'customPOST', 'customPUT', 'customDELETE', 'customGETLIST',
-    		'$getList', '$resolved', 'restangularCollection', 'one', 'all', 'doGET', 'doPOST', 'doPUT',
-    		'doDELETE', 'doGETLIST', 'addRestangularMethod', 'getRestangularUrl', 'several',
-    		'getRequestedUrl', 'clone', 'reqParams', 'withHttpConfig', 'oneUrl', 'allUrl',
-    		'getParentList', 'save', 'fromServer', 'plain', 'singleOne'
+  # TODO: inject pluralize
+  .factory 'RESTAdapter', ($injector, $q, RESTAdapterRestangular, sanitizeRestangularOne) ->
 
-	# TODO: inject pluralize
-	.factory 'RESTAdapter', (RESTAdapterRestangular, sanitizeRestangularOne, $q) ->
+    # Return an array of all the records
+    findAll = (type, subResourceName) ->
 
-		# Return an array of all the records
-		findAll = (type) ->
-			RESTAdapterRestangular.all(pluralize(type)).getList()
+      if subResourceName
+        return RESTAdapterRestangular.all(pluralize(type)).all(subResourceName).getList()
 
-		# Return an array of records filtered by the given query
-		findQuery = (type, query) ->
-			RESTAdapterRestangular.all(pluralize(type)).getList(query)
+      RESTAdapterRestangular.all(pluralize(type)).getList()
 
-		# Return one record found by his `id` property
-		findById = (type, id) ->
-			deferred = $q.defer()
+    # Return an array of records filtered by the given query
+    findQuery = (type, query) ->
+      RESTAdapterRestangular.all(pluralize(type)).getList(query)
 
-			RESTAdapterRestangular.one(pluralize(type), id).get().then (record) ->
+    loadHasMany = (record, type) ->
+      deferred = $q.defer()
+      promises = {}
 
-				# TODO: do this into a separate function so we can choose to not side load relationships
-				for propertyName of sanitizeRestangularOne(record)
-					if _.include(propertyName, '_ids')
-						if record.originalResponse
-							pluralizedPropertyName = pluralize(propertyName.replace('_ids', ''))
+      for propertyName of sanitizeRestangularOne(record)
+        if _.include(propertyName, '_ids')
+          if record.originalResponse
+            strippedPropertyName = propertyName.replace('_ids', '')
+            pluralizedPropertyName = pluralize(strippedPropertyName)
 
-							if record.originalResponse[pluralizedPropertyName]
-								record[pluralizedPropertyName] = record.originalResponse[pluralizedPropertyName]
+            if record.originalResponse[pluralizedPropertyName]
+              # record[pluralizedPropertyName] = record.originalResponse[pluralizedPropertyName]
 
-				deferred.resolve(record)
+              modelName = _.str.classify(strippedPropertyName) + 'Model'
+              if $injector.has(modelName)
+                model = $injector.get(modelName)
 
-			deferred.promise
+                records = _.map record.originalResponse[pluralizedPropertyName], (record) ->
+                  new model(record, strippedPropertyName)
 
-		# Create a record
-		createRecord = (type, record) ->
-			console.log 'createRecord', type, record
-			# TODO: createRecord
+                record[pluralizedPropertyName] = records
 
-		# Delete a record
-		deleteRecord = (type, record) ->
-			console.log 'deleteRecord', type, record
-			# TODO: deleteRecord
+      deferred.resolve(record)
 
-		class LocalForageAdapter
-			constructor: ->
+      deferred.promise
 
-			findAll: (type) ->
-				findAll(type)
-			findByIds: (type, ids) ->
-				findByIds(type, ids)
-			findById: (type, id) ->
-				findById(type, id)
-			findQuery: (type, query) ->
-				findQuery(type, query)
-			createRecord: (type, record) ->
-				createRecord(type, record)
-			deleteRecord: (type, record) ->
-				deleteRecord(type, record)
+    # Return one record found by his `id` property
+    findById = (type, id) ->
+      deferred = $q.defer()
+
+      RESTAdapterRestangular.one(pluralize(type), id).get().then (record) ->
+        if record
+          loadHasMany(record, type).then (record) ->
+            deferred.resolve(record)
+        else
+          deferred.reject('not_found')
+
+      deferred.promise
+
+    # Create a record
+    createRecord = (type, record) ->
+      console.error 'createRecord', type, record
+      # TODO: createRecord
+
+    # Delete a record
+    deleteRecord = (type, record) ->
+      console.error 'deleteRecord', type, record
+      # TODO: deleteRecord
+
+    class RESTAdapter
+      constructor: ->
+
+      findAll: (type, subResourceName) ->
+        findAll(type, subResourceName)
+      findByIds: (type, ids) ->
+        findByIds(type, ids)
+      findById: (type, id) ->
+        findById(type, id)
+      findQuery: (type, query) ->
+        findQuery(type, query)
+      createRecord: (type, record) ->
+        createRecord(type, record)
+      deleteRecord: (type, record) ->
+        deleteRecord(type, record)

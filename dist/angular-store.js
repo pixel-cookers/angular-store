@@ -49,9 +49,12 @@
    */
   angular.module('store.fileSystem', ['store.fileSystem.core', 'store.fileSystem.restangular']);
 
-  angular.module('store.fileSystem.core', ['store.fileSystem.restangular']).factory('FileSystemAdapter', function($q, FileSystemAdapterRestangular) {
-    var FileSystemAdapter, createRecord, deleteRecord, findAll, findBy, findById, findQuery;
-    findAll = function(type) {
+  angular.module('store.fileSystem.core', ['store.fileSystem.restangular', 'store.core.sanitizeRestangularOne']).factory('FileSystemAdapter', function($q, $injector, sanitizeRestangularOne, FileSystemAdapterRestangular) {
+    var FileSystemAdapter, createRecord, deleteRecord, findAll, findBy, findById, findByIds, findQuery, loadHasMany;
+    findAll = function(type, subResourceName) {
+      if (subResourceName) {
+        return FileSystemAdapterRestangular.all(pluralize(type)).all(subResourceName).getList();
+      }
       return FileSystemAdapterRestangular.all(pluralize(type)).getList();
     };
     findQuery = function(type, query) {
@@ -68,18 +71,59 @@
       return deferred.promise;
     };
     findById = function(type, id) {
-      var deferred;
+      var deferred, record;
       deferred = $q.defer();
+      record = null;
       FileSystemAdapterRestangular.all(pluralize(type)).getList().then(function(records) {
-        var record;
         record = _.find(records, {
           id: id
         });
         if (record) {
-          return deferred.resolve(record);
+          return loadHasMany(record, type).then(function(record) {
+            return deferred.resolve(record);
+          });
         } else {
           return deferred.reject('not_found');
         }
+      });
+      return deferred.promise;
+    };
+    findByIds = function(type, ids) {
+      var deferred, modelName, records;
+      modelName = _.str.classify(type) + 'Model';
+      deferred = $q.defer();
+      records = [];
+      FileSystemAdapterRestangular.all(pluralize(type)).getList().then(function(records) {
+        var model;
+        records = _.where(records, function(record) {
+          return _.contains(ids, record.id);
+        });
+        if ($injector.has(modelName)) {
+          model = $injector.get(modelName);
+          records = _.map(records, function(record) {
+            return new model(record, type);
+          });
+        }
+        return deferred.resolve(records);
+      });
+      return deferred.promise;
+    };
+    loadHasMany = function(record, type) {
+      var deferred, pluralizedPropertyName, promises, propertyName;
+      deferred = $q.defer();
+      promises = {};
+      for (propertyName in sanitizeRestangularOne(record)) {
+        if (_.include(propertyName, '_ids')) {
+          pluralizedPropertyName = pluralize(propertyName.replace('_ids', ''));
+          promises[pluralizedPropertyName] = findByIds(propertyName.replace('_ids', ''), record[propertyName]);
+        }
+      }
+      $q.all(promises).then(function(relationships) {
+        var index;
+        for (index in relationships) {
+          record[index] = relationships[index];
+        }
+        return deferred.resolve(record);
       });
       return deferred.promise;
     };
@@ -114,8 +158,8 @@
     return FileSystemAdapter = (function() {
       function FileSystemAdapter() {}
 
-      FileSystemAdapter.prototype.findAll = function(type) {
-        return findAll(type);
+      FileSystemAdapter.prototype.findAll = function(type, subResourceName) {
+        return findAll(type, subResourceName);
       };
 
       FileSystemAdapter.prototype.findQuery = function(type, query) {
@@ -374,71 +418,90 @@
    */
   angular.module('store.rest', ['store.rest.core', 'store.rest.restangular']);
 
-  angular.module('store.rest.core', ['store.rest.restangular']).factory('sanitizeRestangularOne', function() {
-    return function(item) {
-      return _.omit(item, 'route', 'parentResource', 'getList', 'get', 'post', 'put', 'remove', 'head', 'trace', 'options', 'patch', '$then', '$resolved', 'restangularCollection', 'customOperation', 'customGET', 'customPOST', 'customPUT', 'customDELETE', 'customGETLIST', '$getList', '$resolved', 'restangularCollection', 'one', 'all', 'doGET', 'doPOST', 'doPUT', 'doDELETE', 'doGETLIST', 'addRestangularMethod', 'getRestangularUrl', 'several', 'getRequestedUrl', 'clone', 'reqParams', 'withHttpConfig', 'oneUrl', 'allUrl', 'getParentList', 'save', 'fromServer', 'plain', 'singleOne');
-    };
-  }).factory('RESTAdapter', function(RESTAdapterRestangular, sanitizeRestangularOne, $q) {
-    var LocalForageAdapter, createRecord, deleteRecord, findAll, findById, findQuery;
-    findAll = function(type) {
+  angular.module('store.rest.core', ['store.rest.restangular', 'store.core.sanitizeRestangularOne']).factory('RESTAdapter', function($injector, $q, RESTAdapterRestangular, sanitizeRestangularOne) {
+    var RESTAdapter, createRecord, deleteRecord, findAll, findById, findQuery, loadHasMany;
+    findAll = function(type, subResourceName) {
+      if (subResourceName) {
+        return RESTAdapterRestangular.all(pluralize(type)).all(subResourceName).getList();
+      }
       return RESTAdapterRestangular.all(pluralize(type)).getList();
     };
     findQuery = function(type, query) {
       return RESTAdapterRestangular.all(pluralize(type)).getList(query);
     };
-    findById = function(type, id) {
-      var deferred;
+    loadHasMany = function(record, type) {
+      var deferred, model, modelName, pluralizedPropertyName, promises, propertyName, records, strippedPropertyName;
       deferred = $q.defer();
-      RESTAdapterRestangular.one(pluralize(type), id).get().then(function(record) {
-        var pluralizedPropertyName, propertyName;
-        for (propertyName in sanitizeRestangularOne(record)) {
-          if (_.include(propertyName, '_ids')) {
-            if (record.originalResponse) {
-              pluralizedPropertyName = pluralize(propertyName.replace('_ids', ''));
-              if (record.originalResponse[pluralizedPropertyName]) {
-                record[pluralizedPropertyName] = record.originalResponse[pluralizedPropertyName];
+      promises = {};
+      for (propertyName in sanitizeRestangularOne(record)) {
+        if (_.include(propertyName, '_ids')) {
+          if (record.originalResponse) {
+            strippedPropertyName = propertyName.replace('_ids', '');
+            pluralizedPropertyName = pluralize(strippedPropertyName);
+            if (record.originalResponse[pluralizedPropertyName]) {
+              modelName = _.str.classify(strippedPropertyName) + 'Model';
+              if ($injector.has(modelName)) {
+                model = $injector.get(modelName);
+                records = _.map(record.originalResponse[pluralizedPropertyName], function(record) {
+                  return new model(record, strippedPropertyName);
+                });
+                record[pluralizedPropertyName] = records;
               }
             }
           }
         }
-        return deferred.resolve(record);
+      }
+      deferred.resolve(record);
+      return deferred.promise;
+    };
+    findById = function(type, id) {
+      var deferred;
+      deferred = $q.defer();
+      RESTAdapterRestangular.one(pluralize(type), id).get().then(function(record) {
+        if (record) {
+          return loadHasMany(record, type).then(function(record) {
+            return deferred.resolve(record);
+          });
+        } else {
+          return deferred.reject('not_found');
+        }
       });
       return deferred.promise;
     };
     createRecord = function(type, record) {
-      return console.log('createRecord', type, record);
+      return console.error('createRecord', type, record);
     };
     deleteRecord = function(type, record) {
-      return console.log('deleteRecord', type, record);
+      return console.error('deleteRecord', type, record);
     };
-    return LocalForageAdapter = (function() {
-      function LocalForageAdapter() {}
+    return RESTAdapter = (function() {
+      function RESTAdapter() {}
 
-      LocalForageAdapter.prototype.findAll = function(type) {
-        return findAll(type);
+      RESTAdapter.prototype.findAll = function(type, subResourceName) {
+        return findAll(type, subResourceName);
       };
 
-      LocalForageAdapter.prototype.findByIds = function(type, ids) {
+      RESTAdapter.prototype.findByIds = function(type, ids) {
         return findByIds(type, ids);
       };
 
-      LocalForageAdapter.prototype.findById = function(type, id) {
+      RESTAdapter.prototype.findById = function(type, id) {
         return findById(type, id);
       };
 
-      LocalForageAdapter.prototype.findQuery = function(type, query) {
+      RESTAdapter.prototype.findQuery = function(type, query) {
         return findQuery(type, query);
       };
 
-      LocalForageAdapter.prototype.createRecord = function(type, record) {
+      RESTAdapter.prototype.createRecord = function(type, record) {
         return createRecord(type, record);
       };
 
-      LocalForageAdapter.prototype.deleteRecord = function(type, record) {
+      RESTAdapter.prototype.deleteRecord = function(type, record) {
         return deleteRecord(type, record);
       };
 
-      return LocalForageAdapter;
+      return RESTAdapter;
 
     })();
   });
@@ -446,6 +509,25 @@
 }).call(this);
 
 //# sourceMappingURL=rest-adapter.js.map
+;(function() {
+  'use strict';
+
+  /**
+    * @ngdoc factory
+    * @name store.RESTAdapterRestangular
+    * @description
+    * # RESTAdapterRestangular
+    * Factory in the store.
+   */
+  angular.module('store.core.sanitizeRestangularOne', []).factory('sanitizeRestangularOne', function() {
+    return function(item) {
+      return _.omit(item, 'route', 'parentResource', 'getList', 'get', 'post', 'put', 'remove', 'head', 'trace', 'options', 'patch', '$then', '$resolved', 'restangularCollection', 'customOperation', 'customGET', 'customPOST', 'customPUT', 'customDELETE', 'customGETLIST', '$getList', '$resolved', 'restangularCollection', 'one', 'all', 'doGET', 'doPOST', 'doPUT', 'doDELETE', 'doGETLIST', 'addRestangularMethod', 'getRestangularUrl', 'several', 'getRequestedUrl', 'clone', 'reqParams', 'withHttpConfig', 'oneUrl', 'allUrl', 'getParentList', 'save', 'fromServer', 'plain', 'singleOne');
+    };
+  });
+
+}).call(this);
+
+//# sourceMappingURL=sanitize-restangular-one.js.map
 ;(function() {
   'use strict';
   angular.module('store', ['store.core', 'store.localForage', 'store.rest', 'store.fileSystem']);
@@ -459,11 +541,15 @@
     * Provider in the Store.
    */
 
-  angular.module('store.core', []).provider('Store', function() {
-    var adapter, adapterName;
-    adapter = null;
-    adapterName = null;
+  angular.module('store.core', []).provider('Store', function($injector) {
+    this.adapterName = 'RESTAdapter';
     this.$get = function($injector, $q) {
+      var adapter, adapterClass;
+      if (!$injector.has(this.adapterName)) {
+        return console.error('invalid_adapter');
+      }
+      adapterClass = $injector.get(this.adapterName);
+      adapter = new adapterClass;
       return {
         "new": function(type, record) {
           var deferred, model, modelName;
@@ -478,13 +564,9 @@
           return deferred.promise;
         },
         find: function(type, id) {
-          var adapterClass;
-          adapterName = _.str.classify(type) + 'Adapter';
-          if (!$injector.has(adapterName)) {
-            console.error('invalid_adapter');
+          if (typeof id === 'string' && !id.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/)) {
+            return this.findAll(type, id);
           }
-          adapterClass = $injector.get(adapterName);
-          adapter = new adapterClass;
           if (arguments.length === 1) {
             return this.findAll(type);
           }
@@ -494,13 +576,13 @@
           id = parseInt(id, 10) || id;
           return this.findById(type, id);
         },
-        findAll: function(type) {
+        findAll: function(type, subResourceName) {
           var deferred, model, modelName;
           deferred = $q.defer();
           modelName = _.str.classify(type) + 'Model';
           if ($injector.has(modelName)) {
             model = $injector.get(modelName);
-            adapter.findAll(type).then(function(records) {
+            adapter.findAll(type, subResourceName).then(function(records) {
               records = _.map(records, function(record) {
                 return new model(record, type);
               });
@@ -531,122 +613,79 @@
           return deferred.promise;
         },
         findByIds: function(type, ids) {
-          var adapterClass, deferred, model, modelName;
+          var deferred, model, modelName;
           if (!ids) {
             console.error('ids parameter required');
           }
           modelName = _.str.classify(type) + 'Model';
           if ($injector.has(modelName)) {
             model = $injector.get(modelName);
-            adapterName = _.str.classify(type) + 'Adapter';
-            if ($injector.has(adapterName)) {
-              adapterClass = $injector.get(adapterName);
-              adapter = new adapterClass;
-              deferred = $q.defer();
-              adapter.findByIds(type, ids).then(function(records) {
-                records = _.map(records, function(record) {
-                  return new model(record, type);
-                });
-                return deferred.resolve(records);
-              }, function(error) {
-                return deferred.reject(error);
+            deferred = $q.defer();
+            adapter.findByIds(type, ids).then(function(records) {
+              records = _.map(records, function(record) {
+                return new model(record, type);
               });
-            } else {
-              deferred.reject('invalid_adapter');
-            }
+              return deferred.resolve(records);
+            }, function(error) {
+              return deferred.reject(error);
+            });
           } else {
             deferred.reject('invalid_model');
           }
           return deferred.promise;
         },
         findBy: function(type, propertyName, value) {
-          var adapterClass, deferred;
+          var adapterName, deferred;
           deferred = $q.defer();
           adapterName = _.str.classify(type) + 'Adapter';
-          if ($injector.has(adapterName)) {
-            adapterClass = $injector.get(adapterName);
-            adapter = new adapterClass;
-            adapter.findBy(type, propertyName, value).then(function(record) {
-              var model, modelName;
-              modelName = _.str.classify(type) + 'Model';
-              if ($injector.has(modelName)) {
-                model = $injector.get(modelName);
-                record = new model(record, type);
-                return deferred.resolve(record);
-              } else {
-                return deferred.reject('invalid_model');
-              }
-            }, function(error) {
-              return deferred.reject(error);
-            });
-          } else {
-            deferred.reject('invalid_adapter');
-          }
+          adapter.findBy(type, propertyName, value).then(function(record) {
+            var model, modelName;
+            modelName = _.str.classify(type) + 'Model';
+            if ($injector.has(modelName)) {
+              model = $injector.get(modelName);
+              record = new model(record, type);
+              return deferred.resolve(record);
+            } else {
+              return deferred.reject('invalid_model');
+            }
+          }, function(error) {
+            return deferred.reject(error);
+          });
           return deferred.promise;
         },
         findById: function(type, id) {
-          var adapterClass, deferred;
+          var deferred;
           if (!id) {
             console.error('id parameter required');
           }
           deferred = $q.defer();
-          adapterName = _.str.classify(type) + 'Adapter';
-          if ($injector.has(adapterName)) {
-            adapterClass = $injector.get(adapterName);
-            adapter = new adapterClass;
-            adapter.findById(type, id).then(function(record) {
-              var model, modelName;
-              modelName = _.str.classify(type) + 'Model';
-              if ($injector.has(modelName)) {
-                model = $injector.get(modelName);
-                record = new model(record, type);
-                return deferred.resolve(record);
-              } else {
-                return deferred.reject('invalid_model');
-              }
-            }, function(error) {
-              return deferred.reject(error);
-            });
-          } else {
-            deferred.reject('invalid_adapter');
-          }
+          adapter.findById(type, id).then(function(record) {
+            var model, modelName;
+            modelName = _.str.classify(type) + 'Model';
+            if ($injector.has(modelName)) {
+              model = $injector.get(modelName);
+              record = new model(record, type);
+              return deferred.resolve(record);
+            } else {
+              return deferred.reject('invalid_model');
+            }
+          }, function(error) {
+            return deferred.reject(error);
+          });
           return deferred.promise;
         },
         createRecord: function(type, record) {
-          var adapterClass;
-          adapterName = _.str.classify(type) + 'Adapter';
-          if ($injector.has(adapterName)) {
-            adapterClass = $injector.get(adapterName);
-            adapter = new adapterClass;
-            return adapter.createRecord(type, record);
-          } else {
-            return console.error('invalid_adapter');
-          }
+          return adapter.createRecord(type, record);
         },
         deleteRecord: function(type, record) {
-          var adapterClass;
-          adapterName = _.str.classify(type) + 'Adapter';
-          if ($injector.has(adapterName)) {
-            adapterClass = $injector.get(adapterName);
-            adapter = new adapterClass;
-            return adapter.deleteRecord(type, record);
-          } else {
-            return console.error('invalid_adapter');
-          }
+          return adapter.deleteRecord(type, record);
         },
         saveRecord: function(record) {
-          var adapterClass, className, type;
+          var className, type;
           className = record.constructor.name;
           className = className.replace('Model', '');
           type = _.str.underscored(className);
-          adapterName = "" + className + "Adapter";
-          if ($injector.has(adapterName)) {
-            adapterClass = $injector.get(adapterName);
-            adapter = new adapterClass;
-            return adapter.saveRecord(type, record);
-          } else {
-            return console.error('invalid_adapter');
-          }
+          return adapter.saveRecord(type, record);
         }
       };
     };

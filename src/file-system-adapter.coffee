@@ -17,13 +17,18 @@ angular
 angular
   .module('store.fileSystem.core', [
     'store.fileSystem.restangular'
+    'store.core.sanitizeRestangularOne'
   ])
 
   # TODO: inject pluralize and lodash
-  .factory 'FileSystemAdapter', ($q, FileSystemAdapterRestangular) ->
+  .factory 'FileSystemAdapter', ($q, $injector, sanitizeRestangularOne, FileSystemAdapterRestangular) ->
 
     # Return an array of all the records
-    findAll = (type) ->
+    findAll = (type, subResourceName) ->
+
+      if subResourceName
+        return FileSystemAdapterRestangular.all(pluralize(type)).all(subResourceName).getList()
+
       FileSystemAdapterRestangular.all(pluralize(type)).getList()
 
     # Return an array of records filtered by the given query
@@ -43,14 +48,55 @@ angular
     # Return one record found by his `id` property
     findById = (type, id) ->
       deferred = $q.defer()
+      record = null
 
       FileSystemAdapterRestangular.all(pluralize(type)).getList().then (records) ->
         record = _.find(records, { id: id })
 
         if record
-          deferred.resolve(record)
+          loadHasMany(record, type).then (record) ->
+            deferred.resolve(record)
         else
           deferred.reject('not_found')
+
+      deferred.promise
+
+    # Return an array of records filtered by id
+    findByIds = (type, ids) ->
+      modelName = _.str.classify(type) + 'Model'
+      deferred = $q.defer()
+      records = []
+
+      FileSystemAdapterRestangular.all(pluralize(type)).getList().then (records) ->
+        records = _.where records, (record) ->
+          _.contains(ids, record.id)
+
+        if $injector.has(modelName)
+          model = $injector.get(modelName)
+
+          records = _.map records, (record) ->
+            new model(record, type)
+
+        deferred.resolve(records)
+
+      deferred.promise
+
+    loadHasMany = (record, type) ->
+      deferred = $q.defer()
+      promises = {}
+
+      # TODO: do this into a separate function so we can choose to not side load relationships
+      for propertyName of sanitizeRestangularOne(record)
+        if _.include(propertyName, '_ids')
+          pluralizedPropertyName = pluralize(propertyName.replace('_ids', ''))
+
+          promises[pluralizedPropertyName] = findByIds(propertyName.replace('_ids', ''), record[propertyName])
+
+      $q.all(promises).then (relationships) ->
+        for index of relationships
+          record[index] = relationships[index]
+
+        deferred.resolve(record)
 
       deferred.promise
 
@@ -88,8 +134,8 @@ angular
     class FileSystemAdapter
       constructor: ->
 
-      findAll: (type) ->
-        findAll(type)
+      findAll: (type, subResourceName) ->
+        findAll(type, subResourceName)
       findQuery: (type, query) ->
         findQuery(type, query)
       findByIds: (type, ids) ->
