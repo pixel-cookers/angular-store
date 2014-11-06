@@ -21,27 +21,54 @@ angular
   ])
 
   # TODO: inject pluralize and lodash
-  .factory 'FileSystemAdapter', ($q, $injector, sanitizeRestangularOne, FileSystemAdapterRestangular) ->
+  .factory 'FileSystemAdapter', ($rootScope, $q, $injector, sanitizeRestangularOne, FileSystemAdapterRestangular) ->
+
+    broadcastNotFound = (error) ->
+      $rootScope.$emit 'store.file_system.not_found'
+      'not_found'
 
     # Return an array of all the records
     findAll = (type, subResourceName) ->
+      deferred = $q.defer()
 
       if subResourceName
-        return FileSystemAdapterRestangular.all(pluralize(type)).all(subResourceName).getList()
+        FileSystemAdapterRestangular
+          .all(pluralize(type))
+          .all(subResourceName)
+          .getList()
+          .then (records) ->
+            deferred.resolve(records)
+          , (error) ->
+            deferred.reject(broadcastNotFound(error))
 
-      FileSystemAdapterRestangular.all(pluralize(type)).getList()
+      else
+        FileSystemAdapterRestangular
+          .all(pluralize(type))
+          .getList()
+          .then (records) ->
+            deferred.resolve(records)
+          , (error) ->
+            deferred.reject(broadcastNotFound(error))
+
+      deferred.promise
 
     # Return an array of records filtered by the given query
     findQuery = (type, query) ->
       deferred = $q.defer()
 
-      FileSystemAdapterRestangular.all(pluralize(type)).getList().then (records) ->
-        records = _.filter(records, query)
+      FileSystemAdapterRestangular
+        .all(pluralize(type))
+        .getList()
+        .then (records) ->
+          records = _.filter(records, query)
 
-        if records
-          deferred.resolve(records)
-        else
-          deferred.reject('not_found')
+          if records
+            deferred.resolve(records)
+          else
+            deferred.reject('not_found')
+
+        , (error) ->
+          deferred.reject(broadcastNotFound(error))
 
       deferred.promise
 
@@ -50,14 +77,20 @@ angular
       deferred = $q.defer()
       record = null
 
-      FileSystemAdapterRestangular.all(pluralize(type)).getList().then (records) ->
-        record = _.find(records, { id: id })
+      FileSystemAdapterRestangular
+        .all(pluralize(type))
+        .getList()
+        .then (records) ->
+          record = _.find(records, { id: id })
 
-        if record
-          loadHasMany(record, type).then (record) ->
-            deferred.resolve(record)
-        else
-          deferred.reject('not_found')
+          if record
+            loadHasMany(record, type).then (record) ->
+              deferred.resolve(record)
+          else
+            deferred.reject('not_found')
+
+        , (error) ->
+          deferred.reject(broadcastNotFound(error))
 
       deferred.promise
 
@@ -67,17 +100,23 @@ angular
       deferred = $q.defer()
       records = []
 
-      FileSystemAdapterRestangular.all(pluralize(type)).getList().then (records) ->
-        records = _.where records, (record) ->
-          _.contains(ids, record.id)
+      FileSystemAdapterRestangular
+        .all(pluralize(type))
+        .getList()
+        .then (records) ->
+          records = _.where records, (record) ->
+            _.contains(ids, record.id)
 
-        if $injector.has(modelName)
-          model = $injector.get(modelName)
+          if $injector.has(modelName)
+            model = $injector.get(modelName)
 
-          records = _.map records, (record) ->
-            new model(record, type)
+            records = _.map records, (record) ->
+              new model(record, type)
 
-        deferred.resolve(records)
+          deferred.resolve(records)
+
+        , (error) ->
+          deferred.reject(broadcastNotFound(error))
 
       deferred.promise
 
@@ -104,19 +143,25 @@ angular
     findBy = (type, propertyName, value) ->
       deferred = $q.defer()
 
-      FileSystemAdapterRestangular.all(pluralize(type)).getList().then (records) ->
-        if value instanceof Array
-          record = _.find records, (filterRecord) ->
-            _.isEqual(filterRecord[propertyName], value)
+      FileSystemAdapterRestangular
+        .all(pluralize(type))
+        .getList()
+        .then (records) ->
+          if value instanceof Array
+            record = _.find records, (filterRecord) ->
+              _.isEqual(filterRecord[propertyName], value)
 
-        else
-          record = _.find records, (filterRecord) ->
-            filterRecord[propertyName] is value
+          else
+            record = _.find records, (filterRecord) ->
+              filterRecord[propertyName] is value
 
-        if record
-          deferred.resolve(record)
-        else
-          deferred.reject('not_found')
+          if record
+            deferred.resolve(record)
+          else
+            deferred.reject('not_found')
+
+        , (error) ->
+          deferred.reject(broadcastNotFound(error))
 
       deferred.promise
 
@@ -129,7 +174,6 @@ angular
     deleteRecord = (type, record) ->
       console.log 'deleteRecord', type, record
       # TODO: deleteRecord
-
 
     class FileSystemAdapter
       constructor: ->

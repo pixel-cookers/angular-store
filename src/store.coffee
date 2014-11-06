@@ -21,18 +21,29 @@ angular
   .module('store.core', [])
 
   # TODO: inject lodash + underscore.string
-  .provider 'Store', ($injector) ->
+  .provider 'Store', () ->
 
-    @adapterName = 'RESTAdapter'
+    configuration =
+      adapterName: 'RESTAdapter'
 
-    @$get = ($injector, $q) ->
-      unless $injector.has @adapterName
-        return console.error 'invalid_adapter'
+    createService = ($injector, $q, config) ->
 
-      adapterClass = $injector.get @adapterName
+      adapter = null
+
+      unless $injector.has config.adapterName
+        console.error 'invalid_adapter'
+
+      adapterClass = $injector.get config.adapterName
       adapter = new adapterClass
 
-      new: (type, record) ->
+      service = {}
+
+      service.withConfig = (config) ->
+        newConfig = angular.copy(_.extend(configuration, config))
+
+        createService($injector, $q, newConfig)
+
+      service.new = (type, record) ->
         deferred = $q.defer()
 
         modelName = _.str.classify(type) + 'Model'
@@ -43,13 +54,17 @@ angular
           deferred.resolve(new model(record, type))
 
         else
+          console.error 'Invalid model', modelName
           deferred.reject('invalid_model')
 
         deferred.promise
 
-      find: (type, id) ->
+      service.getAdapter = ->
+        adapter
 
-        # if the second argument is a string, this is most probably a sub resource
+      service.find = (type, id) ->
+
+        # if the second argument is a string, this is probably a sub resource
         if typeof(id) is 'string' and not id.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/)
           return @findAll(type, id)
 
@@ -64,7 +79,7 @@ angular
 
         @findById(type, id)
 
-      findAll: (type, subResourceName) ->
+      service.findAll = (type, subResourceName) ->
         deferred = $q.defer()
 
         modelName = _.str.classify(type) + 'Model'
@@ -82,11 +97,12 @@ angular
             deferred.reject(error)
 
         else
+          console.error 'Invalid model', modelName
           deferred.reject('invalid_model')
 
         deferred.promise
 
-      findQuery: (type, query) ->
+      service.findQuery = (type, query) ->
         deferred = $q.defer()
 
         modelName = _.str.classify(type) + 'Model'
@@ -101,11 +117,12 @@ angular
             deferred.resolve(records)
 
         else
+          console.error 'Invalid model', modelName
           deferred.reject('invalid_model')
 
         deferred.promise
 
-      findByIds: (type, ids) ->
+      service.findByIds = (type, ids) ->
         if not ids
           console.error 'ids parameter required'
 
@@ -125,13 +142,13 @@ angular
             deferred.reject(error)
 
         else
+          console.error 'Invalid model', modelName
           deferred.reject('invalid_model')
 
         deferred.promise
 
-      findBy: (type, propertyName, value) ->
+      service.findBy = (type, propertyName, value) ->
         deferred = $q.defer()
-        adapterName = _.str.classify(type) + 'Adapter'
 
         adapter.findBy(type, propertyName, value).then (record) ->
           modelName = _.str.classify(type) + 'Model'
@@ -143,6 +160,7 @@ angular
             deferred.resolve(record)
 
           else
+            console.error 'Invalid model', modelName
             deferred.reject('invalid_model')
 
         , (error) ->
@@ -150,7 +168,7 @@ angular
 
         deferred.promise
 
-      findById: (type, id) ->
+      service.findById = (type, id) ->
         unless id
           console.error 'id parameter required'
 
@@ -165,6 +183,7 @@ angular
             deferred.resolve(record)
 
           else
+            console.error 'Invalid model', modelName
             deferred.reject('invalid_model')
 
         , (error) ->
@@ -172,19 +191,24 @@ angular
 
         deferred.promise
 
-      createRecord: (type, record) ->
+      service.createRecord = (type, record) ->
         adapter.createRecord(type, record)
 
       # TODO: remove the type parameter since we can get it from the record
-      deleteRecord: (type, record) ->
+      service.deleteRecord = (type, record) ->
         adapter.deleteRecord(type, record)
 
-      saveRecord: (record) ->
+      service.saveRecord = (record) ->
         className = record.constructor.name
         className = className.replace('Model', '')
 
         type = _.str.underscored(className)
 
         adapter.saveRecord(type, record)
+
+      service
+
+    @$get = ($injector, $q) ->
+      createService($injector, $q, configuration)
 
     return
