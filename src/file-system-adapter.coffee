@@ -15,13 +15,16 @@ angular
   ])
 
 angular
+
   .module('store.fileSystem.core', [
     'store.fileSystem.restangular'
     'store.core.sanitizeRestangularOne'
   ])
 
+  .value 'FileSystemAdapterMapping', []
+
   # TODO: inject pluralize and lodash
-  .factory 'FileSystemAdapter', ($rootScope, $q, $injector, sanitizeRestangularOne, FileSystemAdapterRestangular) ->
+  .factory 'FileSystemAdapter', ($rootScope, $q, $injector, sanitizeRestangularOne, FileSystemAdapterRestangular, FileSystemAdapterMapping) ->
 
     broadcastNotFound = (error) ->
       $rootScope.$emit 'store.file_system.not_found'
@@ -127,9 +130,17 @@ angular
       # TODO: do this into a separate function so we can choose to not side load relationships
       for propertyName of sanitizeRestangularOne(record)
         if _.include(propertyName, '_ids')
+          addPromise = true
           pluralizedPropertyName = pluralize(propertyName.replace('_ids', ''))
 
-          promises[pluralizedPropertyName] = findByIds(propertyName.replace('_ids', ''), record[propertyName])
+          # hack to make sure that attachment_ids load media instead of attachments
+          angular.forEach FileSystemAdapterMapping, (mapping) ->
+            if pluralizedPropertyName is mapping.from
+              promises['media'] = findByIds('media', record[propertyName])
+              addPromise = false
+
+          if addPromise
+            promises[pluralizedPropertyName] = findByIds(propertyName.replace('_ids', ''), record[propertyName])
 
       $q.all(promises).then (relationships) ->
         for index of relationships

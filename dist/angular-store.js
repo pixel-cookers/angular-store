@@ -49,7 +49,7 @@
    */
   angular.module('store.fileSystem', ['store.fileSystem.core', 'store.fileSystem.restangular']);
 
-  angular.module('store.fileSystem.core', ['store.fileSystem.restangular', 'store.core.sanitizeRestangularOne']).factory('FileSystemAdapter', function($rootScope, $q, $injector, sanitizeRestangularOne, FileSystemAdapterRestangular) {
+  angular.module('store.fileSystem.core', ['store.fileSystem.restangular', 'store.core.sanitizeRestangularOne']).value('FileSystemAdapterMapping', []).factory('FileSystemAdapter', function($rootScope, $q, $injector, sanitizeRestangularOne, FileSystemAdapterRestangular, FileSystemAdapterMapping) {
     var FileSystemAdapter, broadcastNotFound, createRecord, deleteRecord, findAll, findBy, findById, findByIds, findQuery, loadHasMany;
     broadcastNotFound = function(error) {
       $rootScope.$emit('store.file_system.not_found');
@@ -131,13 +131,22 @@
       return deferred.promise;
     };
     loadHasMany = function(record, type) {
-      var deferred, pluralizedPropertyName, promises, propertyName;
+      var addPromise, deferred, pluralizedPropertyName, promises, propertyName;
       deferred = $q.defer();
       promises = {};
       for (propertyName in sanitizeRestangularOne(record)) {
         if (_.include(propertyName, '_ids')) {
+          addPromise = true;
           pluralizedPropertyName = pluralize(propertyName.replace('_ids', ''));
-          promises[pluralizedPropertyName] = findByIds(propertyName.replace('_ids', ''), record[propertyName]);
+          angular.forEach(FileSystemAdapterMapping, function(mapping) {
+            if (pluralizedPropertyName === mapping.from) {
+              promises['media'] = findByIds('media', record[propertyName]);
+              return addPromise = false;
+            }
+          });
+          if (addPromise) {
+            promises[pluralizedPropertyName] = findByIds(propertyName.replace('_ids', ''), record[propertyName]);
+          }
         }
       }
       $q.all(promises).then(function(relationships) {
