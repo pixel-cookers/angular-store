@@ -816,9 +816,6 @@
         if ($injector.has(modelName)) {
           model = $injector.get(modelName);
           adapter.findByIds(type, ids).then(function(records) {
-            records = _.map(records, function(record) {
-              return new model(record, type);
-            });
             return deferred.resolve(records);
           }, function(error) {
             return deferred.reject(error);

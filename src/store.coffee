@@ -114,9 +114,6 @@ angular
           model = $injector.get(modelName)
 
           adapter.findByIds(type, ids).then (records) ->
-            records = _.map records, (record) ->
-              new model(record, type)
-
             deferred.resolve(records)
 
           , (error) ->
