@@ -18,16 +18,24 @@ angular
 
   .module('store.fileSystem.core', [
     'store.fileSystem.restangular'
+    'store.fileSystem.adapterCache'
+    'ngCordova.plugins.file'
     'store.core.sanitizeRestangularOne'
   ])
 
   .value 'FileSystemAdapterMapping', []
 
-  # TODO: inject pluralize and lodash
-  .factory 'FileSystemAdapter', ($rootScope, $q, $injector, sanitizeRestangularOne, FileSystemAdapterRestangular, FileSystemAdapterMapping) ->
+  .factory 'FileSystemAdapterWriteDirectory', ->
+    if cordova.file.documentsDirectory
+      return cordova.file.documentsDirectory
 
-    broadcastNotFound = (error) ->
-      $rootScope.$emit 'store.file_system.not_found'
+    cordova.file.externalApplicationStorageDirectory
+
+  # TODO: inject pluralize and lodash
+  .factory 'FileSystemAdapter', ($rootScope, $q, $injector, $cordovaFile, sanitizeRestangularOne, FileSystemAdapterRestangular, FileSystemAdapterMapping, FileSystemAdapterWriteDirectory, FileSystemAdapterCache) ->
+
+    broadcastNotFound = (error, type) ->
+      $rootScope.$emit 'store.file_system.not_found', type
       'not_found'
 
     # Return an array of all the records
@@ -38,20 +46,20 @@ angular
         FileSystemAdapterRestangular
           .all(pluralize(type))
           .all(subResourceName)
-          .getList()
+          .getList(FileSystemAdapterCache.getAsParam())
           .then (records) ->
             deferred.resolve(records)
           , (error) ->
-            deferred.reject(broadcastNotFound(error))
+            deferred.reject(broadcastNotFound(error, type))
 
       else
         FileSystemAdapterRestangular
           .all(pluralize(type))
-          .getList()
+          .getList(FileSystemAdapterCache.getAsParam())
           .then (records) ->
             deferred.resolve(records)
           , (error) ->
-            deferred.reject(broadcastNotFound(error))
+            deferred.reject(broadcastNotFound(error, type))
 
       deferred.promise
 
@@ -61,7 +69,7 @@ angular
 
       FileSystemAdapterRestangular
         .all(pluralize(type))
-        .getList()
+        .getList(FileSystemAdapterCache.getAsParam())
         .then (records) ->
           records = _.filter(records, query)
 
@@ -71,7 +79,7 @@ angular
             deferred.reject('not_found')
 
         , (error) ->
-          deferred.reject(broadcastNotFound(error))
+          deferred.reject(broadcastNotFound(error, type))
 
       deferred.promise
 
@@ -82,7 +90,7 @@ angular
 
       FileSystemAdapterRestangular
         .all(pluralize(type))
-        .getList()
+        .getList(FileSystemAdapterCache.getAsParam())
         .then (records) ->
           record = _.find(records, { id: id })
 
@@ -93,7 +101,7 @@ angular
             deferred.reject('not_found')
 
         , (error) ->
-          deferred.reject(broadcastNotFound(error))
+          deferred.reject(broadcastNotFound(error, type))
 
       deferred.promise
 
@@ -105,21 +113,15 @@ angular
 
       FileSystemAdapterRestangular
         .all(pluralize(type))
-        .getList()
+        .getList(FileSystemAdapterCache.getAsParam())
         .then (records) ->
           records = _.where records, (record) ->
             _.contains(ids, record.id)
 
-          if $injector.has(modelName)
-            model = $injector.get(modelName)
-
-            records = _.map records, (record) ->
-              new model(record, type)
-
           deferred.resolve(records)
 
         , (error) ->
-          deferred.reject(broadcastNotFound(error))
+          deferred.reject(broadcastNotFound(error, type))
 
       deferred.promise
 
@@ -156,7 +158,7 @@ angular
 
       FileSystemAdapterRestangular
         .all(pluralize(type))
-        .getList()
+        .getList(FileSystemAdapterCache.getAsParam())
         .then (records) ->
           if value instanceof Array
             record = _.find records, (filterRecord) ->
@@ -172,19 +174,116 @@ angular
             deferred.reject('not_found')
 
         , (error) ->
-          deferred.reject(broadcastNotFound(error))
+          deferred.reject(broadcastNotFound(error, type))
 
       deferred.promise
 
     # Create a record
     createRecord = (type, record) ->
-      console.log 'createRecord', type, record
       # TODO: createRecord
 
     # Delete a record
     deleteRecord = (type, record) ->
-      console.log 'deleteRecord', type, record
       # TODO: deleteRecord
+
+    # Save a record
+    saveRecord = (type, record) ->
+      deferred = $q.defer()
+
+      # some records were found
+      findAll(type).then findAllSuccess = (currentRecords) ->
+        foundRecord = false
+        newRecords = deserialize(currentRecords, type)
+
+
+        if currentRecords.length > 0
+          angular.forEach currentRecords, (currentRecord, index) ->
+            if angular.isDefined(currentRecord.id) and record?.id is currentRecord.id
+              newRecords[index] = record
+              foundRecord = true
+
+        unless foundRecord
+          newRecords.push record
+
+        save(record.type, newRecords).then saveSuccess = ->
+          deferred.resolve(record)
+
+      # no records found or error
+      , findAllError = ->
+        save(record.type, [record]).then saveSuccess = ->
+          deferred.resolve(record)
+
+      deferred.promise
+
+    # Save all records for a given type
+    save = (type, records) ->
+      deferred = $q.defer()
+      pluralizedType = pluralize(type)
+      writeFileOptions = { 'append': false }
+
+      # prepare the json object
+      jsonRecords = {}
+      jsonRecords[pluralizedType] = serialize(records)
+      jsonRecords = JSON.stringify(jsonRecords)
+
+      # console.debug 'Saving record(s)', jsonRecords
+
+      # TODO: make sure this does not crash the application when outside or a
+      #       cordova application :s
+      resolveLocalFileSystemURL FileSystemAdapterWriteDirectory, (result) ->
+        # dirty trick to get relative path in cordova...
+        relativePath = result.fullPath.substring(1)
+        destination = "#{relativePath}#{pluralizedType}.json"
+
+        $cordovaFile.writeFile(destination, jsonRecords, writeFileOptions).then createFileSuccess = (result) ->
+          deferred.resolve(records)
+
+        , createFileError = (error) ->
+          deferred.reject('could_not_write_file')
+
+      , (error) ->
+        deferred.reject('could_not_open_directory')
+
+      deferred.promise
+
+    # serialize a record or a collection of records
+    serialize = (records) ->
+      if Array.isArray(records)
+        return _.map records, (record) ->
+          serializeRecord(record)
+
+      serializeRecord(records)
+
+    # serialize a record to store it with the correct format
+    serializeRecord = (record) ->
+      for key, value of record
+        if angular.isFunction(value)
+          delete record[key]
+
+        else
+          record[_.str.underscored(key)] = value
+          delete record[key]
+
+      record
+
+    # deserialize a record or a collection of records
+    deserialize = (records, type) ->
+      if Array.isArray(records)
+        return _.map records, (record) ->
+          deserializeRecord(record, type)
+
+      deserializeRecord(records, type)
+
+    # deserialize a record to store it with the correct format
+    deserializeRecord = (record, type) ->
+      modelName = _.str.classify(type) + 'Model'
+
+      unless $injector.has(modelName)
+        console.error 'Invalid model', modelName
+        return record
+
+      model = $injector.get modelName
+      new model(record, type)
 
     class FileSystemAdapter
       constructor: ->
@@ -203,3 +302,7 @@ angular
         createRecord(type, record)
       deleteRecord: (type, record) ->
         deleteRecord(type, record)
+      saveRecord: (type, record) ->
+        saveRecord(type, record)
+      save: (type, records) ->
+        save(type, records)

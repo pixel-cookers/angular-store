@@ -123,6 +123,8 @@ angular
         deferred.promise
 
       service.findByIds = (type, ids) ->
+        deferred = $q.defer()
+
         if not ids
           console.error 'ids parameter required'
 
@@ -130,7 +132,6 @@ angular
 
         if $injector.has(modelName)
           model = $injector.get(modelName)
-          deferred = $q.defer()
 
           adapter.findByIds(type, ids).then (records) ->
             records = _.map records, (record) ->
@@ -199,12 +200,7 @@ angular
         adapter.deleteRecord(type, record)
 
       service.saveRecord = (record) ->
-        className = record.constructor.name
-        className = className.replace('Model', '')
-
-        type = _.str.underscored(className)
-
-        adapter.saveRecord(type, record)
+        adapter.saveRecord(record.type, record)
 
       service
 
