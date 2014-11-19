@@ -39,6 +39,7 @@ angular
       deferred = $q.defer()
       promises = {}
 
+      # TODO: move this into a deserialize function ?
       for propertyName of sanitizeRestangularOne(record)
         if _.include(propertyName, '_ids')
           if record.originalResponse

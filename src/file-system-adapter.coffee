@@ -41,24 +41,27 @@ angular
     # Return an array of all the records
     findAll = (type, subResourceName) ->
       deferred = $q.defer()
+      promises = []
 
       if subResourceName
         FileSystemAdapterRestangular
           .all(pluralize(type))
           .all(subResourceName)
           .getList(FileSystemAdapterCache.getAsParam())
-          .then (records) ->
-            deferred.resolve(records)
-          , (error) ->
+          .then findAllSuccess = (records) ->
+            deferred.resolve(deserialize(records, type))
+
+          , findAllError = (error) ->
             deferred.reject(broadcastNotFound(error, type))
 
       else
         FileSystemAdapterRestangular
           .all(pluralize(type))
           .getList(FileSystemAdapterCache.getAsParam())
-          .then (records) ->
-            deferred.resolve(records)
-          , (error) ->
+          .then findAllSuccess = (records) ->
+            deferred.resolve(deserialize(records, type))
+
+          , findAllError = (error) ->
             deferred.reject(broadcastNotFound(error, type))
 
       deferred.promise
@@ -129,7 +132,6 @@ angular
       deferred = $q.defer()
       promises = {}
 
-      # TODO: do this into a separate function so we can choose to not side load relationships
       for propertyName of sanitizeRestangularOne(record)
         if _.include(propertyName, '_ids')
           addPromise = true
@@ -146,7 +148,7 @@ angular
 
       $q.all(promises).then (relationships) ->
         for index of relationships
-          record[index] = relationships[index]
+          record[index] = deserialize(relationships[index], pluralize(index, 1))
 
         deferred.resolve(record)
 
@@ -195,7 +197,6 @@ angular
         foundRecord = false
         newRecords = deserialize(currentRecords, type)
 
-
         if currentRecords.length > 0
           angular.forEach currentRecords, (currentRecord, index) ->
             if angular.isDefined(currentRecord.id) and record?.id is currentRecord.id
@@ -225,8 +226,6 @@ angular
       jsonRecords = {}
       jsonRecords[pluralizedType] = serialize(records)
       jsonRecords = JSON.stringify(jsonRecords)
-
-      # console.debug 'Saving record(s)', jsonRecords
 
       # TODO: make sure this does not crash the application when outside or a
       #       cordova application :s
@@ -279,7 +278,7 @@ angular
       modelName = _.str.classify(type) + 'Model'
 
       unless $injector.has(modelName)
-        console.error 'Invalid model', modelName
+        console.error 'Invalid model', modelName, 'for type:', type
         return record
 
       model = $injector.get modelName

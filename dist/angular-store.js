@@ -100,18 +100,19 @@
       return 'not_found';
     };
     findAll = function(type, subResourceName) {
-      var deferred;
+      var deferred, findAllError, findAllSuccess, promises;
       deferred = $q.defer();
+      promises = [];
       if (subResourceName) {
-        FileSystemAdapterRestangular.all(pluralize(type)).all(subResourceName).getList(FileSystemAdapterCache.getAsParam()).then(function(records) {
-          return deferred.resolve(records);
-        }, function(error) {
+        FileSystemAdapterRestangular.all(pluralize(type)).all(subResourceName).getList(FileSystemAdapterCache.getAsParam()).then(findAllSuccess = function(records) {
+          return deferred.resolve(deserialize(records, type));
+        }, findAllError = function(error) {
           return deferred.reject(broadcastNotFound(error, type));
         });
       } else {
-        FileSystemAdapterRestangular.all(pluralize(type)).getList(FileSystemAdapterCache.getAsParam()).then(function(records) {
-          return deferred.resolve(records);
-        }, function(error) {
+        FileSystemAdapterRestangular.all(pluralize(type)).getList(FileSystemAdapterCache.getAsParam()).then(findAllSuccess = function(records) {
+          return deferred.resolve(deserialize(records, type));
+        }, findAllError = function(error) {
           return deferred.reject(broadcastNotFound(error, type));
         });
       }
@@ -189,7 +190,7 @@
       $q.all(promises).then(function(relationships) {
         var index;
         for (index in relationships) {
-          record[index] = relationships[index];
+          record[index] = deserialize(relationships[index], pluralize(index, 1));
         }
         return deferred.resolve(record);
       });
@@ -307,7 +308,7 @@
       var model, modelName;
       modelName = _.str.classify(type) + 'Model';
       if (!$injector.has(modelName)) {
-        console.error('Invalid model', modelName);
+        console.error('Invalid model', modelName, 'for type:', type);
         return record;
       }
       model = $injector.get(modelName);
