@@ -25,7 +25,6 @@ angular
 
     # Return an array of all the records
     findAll = (type, subResourceName) ->
-
       if subResourceName
         return RESTAdapterRestangular.all(pluralize(type)).all(subResourceName).getList()
 
@@ -66,12 +65,18 @@ angular
     findById = (type, id) ->
       deferred = $q.defer()
 
-      RESTAdapterRestangular.one(pluralize(type), id).get().then (record) ->
-        if record
-          loadHasMany(record, type).then (record) ->
-            deferred.resolve(record)
-        else
-          deferred.reject('not_found')
+      RESTAdapterRestangular
+        .one(pluralize(type), id)
+        .get()
+        .then findOneSuccess = (record) ->
+          if record
+            loadHasMany(record, type).then (record) ->
+              deferred.resolve(record)
+          else
+            deferred.reject('not_found')
+
+        , findOneError = (error) ->
+          deferred.reject(error)
 
       deferred.promise
 

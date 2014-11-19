@@ -622,9 +622,9 @@
       return deferred.promise;
     };
     findById = function(type, id) {
-      var deferred;
+      var deferred, findOneError, findOneSuccess;
       deferred = $q.defer();
-      RESTAdapterRestangular.one(pluralize(type), id).get().then(function(record) {
+      RESTAdapterRestangular.one(pluralize(type), id).get().then(findOneSuccess = function(record) {
         if (record) {
           return loadHasMany(record, type).then(function(record) {
             return deferred.resolve(record);
@@ -632,6 +632,8 @@
         } else {
           return deferred.reject('not_found');
         }
+      }, findOneError = function(error) {
+        return deferred.reject(error);
       });
       return deferred.promise;
     };
