@@ -297,10 +297,12 @@
       return record;
     };
     deserialize = function(records, type) {
+      var deserializedRecords;
       if (Array.isArray(records)) {
-        return _.map(records, function(record) {
+        deserializedRecords = _.map(records, function(record) {
           return deserializeRecord(record, type);
         });
+        return deserializedRecords;
       }
       return deserializeRecord(records, type);
     };
@@ -588,10 +590,35 @@
   angular.module('store.rest.core', ['store.rest.restangular', 'store.core.sanitizeRestangularOne']).factory('RESTAdapter', function($injector, $q, RESTAdapterRestangular, sanitizeRestangularOne) {
     var RESTAdapter, createRecord, deleteRecord, findAll, findById, findQuery, loadHasMany;
     findAll = function(type, subResourceName) {
-      if (subResourceName) {
-        return RESTAdapterRestangular.all(pluralize(type)).all(subResourceName).getList();
+      var deferred, error, model, modelName, success;
+      deferred = $q.defer();
+      modelName = _.str.classify(type) + 'Model';
+      if ($injector.has(modelName)) {
+        model = $injector.get(modelName);
+        if (subResourceName) {
+          RESTAdapterRestangular.all(pluralize(type)).all(subResourceName).getList().then(success = function(records) {
+            records = _.map(records, function(record) {
+              return new model(record, type);
+            });
+            return deferred.resolve(records);
+          }, error = function(error) {
+            return deferred.reject(error);
+          });
+        } else {
+          RESTAdapterRestangular.all(pluralize(type)).getList().then(success = function(records) {
+            records = _.map(records, function(record) {
+              return new model(record, type);
+            });
+            return deferred.resolve(records);
+          }, error = function(error) {
+            return deferred.reject(error);
+          });
+        }
+      } else {
+        console.error('Invalid model', modelName);
+        deferred.reject('invalid_model');
       }
-      return RESTAdapterRestangular.all(pluralize(type)).getList();
+      return deferred.promise;
     };
     findQuery = function(type, query) {
       return RESTAdapterRestangular.all(pluralize(type)).getList(query);
@@ -759,24 +786,7 @@
         return this.findById(type, id);
       };
       service.findAll = function(type, subResourceName) {
-        var deferred, model, modelName;
-        deferred = $q.defer();
-        modelName = _.str.classify(type) + 'Model';
-        if ($injector.has(modelName)) {
-          model = $injector.get(modelName);
-          adapter.findAll(type, subResourceName).then(function(records) {
-            records = _.map(records, function(record) {
-              return new model(record, type);
-            });
-            return deferred.resolve(records);
-          }, function(error) {
-            return deferred.reject(error);
-          });
-        } else {
-          console.error('Invalid model', modelName);
-          deferred.reject('invalid_model');
-        }
-        return deferred.promise;
+        return adapter.findAll(type, subResourceName);
       };
       service.findQuery = function(type, query) {
         var deferred, model, modelName;

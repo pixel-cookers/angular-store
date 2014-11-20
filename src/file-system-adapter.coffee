@@ -268,8 +268,10 @@ angular
     # deserialize a record or a collection of records
     deserialize = (records, type) ->
       if Array.isArray(records)
-        return _.map records, (record) ->
+        deserializedRecords = _.map records, (record) ->
           deserializeRecord(record, type)
+
+        return deserializedRecords
 
       deserializeRecord(records, type)
 

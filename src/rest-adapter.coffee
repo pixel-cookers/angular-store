@@ -25,10 +25,44 @@ angular
 
     # Return an array of all the records
     findAll = (type, subResourceName) ->
-      if subResourceName
-        return RESTAdapterRestangular.all(pluralize(type)).all(subResourceName).getList()
+      deferred = $q.defer()
+      modelName = _.str.classify(type) + 'Model'
 
-      RESTAdapterRestangular.all(pluralize(type)).getList()
+      if $injector.has(modelName)
+        model = $injector.get modelName
+
+        if subResourceName
+          RESTAdapterRestangular
+          .all(pluralize(type))
+          .all(subResourceName)
+          .getList()
+          .then success = (records) ->
+            records = _.map records, (record) ->
+              new model(record, type)
+
+            deferred.resolve(records)
+
+          , error = (error) ->
+            deferred.reject(error)
+
+        else
+          RESTAdapterRestangular
+          .all(pluralize(type))
+          .getList()
+          .then success = (records) ->
+            records = _.map records, (record) ->
+              new model(record, type)
+
+            deferred.resolve(records)
+
+          , error = (error) ->
+            deferred.reject(error)
+
+      else
+        console.error 'Invalid model', modelName
+        deferred.reject('invalid_model')
+
+      deferred.promise
 
     # Return an array of records filtered by the given query
     findQuery = (type, query) ->
@@ -46,7 +80,6 @@ angular
             pluralizedPropertyName = pluralize(strippedPropertyName)
 
             if record.originalResponse[pluralizedPropertyName]
-              # record[pluralizedPropertyName] = record.originalResponse[pluralizedPropertyName]
 
               modelName = _.str.classify(strippedPropertyName) + 'Model'
               if $injector.has(modelName)

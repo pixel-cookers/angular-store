@@ -80,27 +80,7 @@ angular
         @findById(type, id)
 
       service.findAll = (type, subResourceName) ->
-        deferred = $q.defer()
-
-        modelName = _.str.classify(type) + 'Model'
-
-        if $injector.has(modelName)
-          model = $injector.get modelName
-
-          adapter.findAll(type, subResourceName).then (records) ->
-            records = _.map records, (record) ->
-              new model(record, type)
-
-            deferred.resolve(records)
-
-          , (error) ->
-            deferred.reject(error)
-
-        else
-          console.error 'Invalid model', modelName
-          deferred.reject('invalid_model')
-
-        deferred.promise
+        adapter.findAll(type, subResourceName)
 
       service.findQuery = (type, query) ->
         deferred = $q.defer()
