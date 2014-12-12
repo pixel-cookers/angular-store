@@ -275,7 +275,7 @@ angular
       resolveLocalFileSystemURL FileSystemAdapterWriteDirectory, (result) ->
         # dirty trick to get relative path in cordova...
         relativePath = result.fullPath.substring(1)
-        destination = "#{relativePath}#{pluralizedType}.json"
+        destination = "#{relativePath}resources/#{pluralizedType}.json"
 
         $cordovaFile.writeFile(destination, jsonRecords, writeFileOptions).then createFileSuccess = (result) ->
           deferred.resolve(records)

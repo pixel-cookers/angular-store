@@ -315,7 +315,7 @@
       resolveLocalFileSystemURL(FileSystemAdapterWriteDirectory, function(result) {
         var createFileError, createFileSuccess, destination, relativePath;
         relativePath = result.fullPath.substring(1);
-        destination = "" + relativePath + pluralizedType + ".json";
+        destination = "" + relativePath + "resources/" + pluralizedType + ".json";
         return $cordovaFile.writeFile(destination, jsonRecords, writeFileOptions).then(createFileSuccess = function(result) {
           return deferred.resolve(records);
         }, createFileError = function(error) {
