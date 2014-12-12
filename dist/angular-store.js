@@ -94,7 +94,7 @@
     }
     return cordova.file.externalApplicationStorageDirectory;
   }).factory('FileSystemAdapter', function($rootScope, $q, $injector, $cordovaFile, sanitizeRestangularOne, FileSystemAdapterRestangular, FileSystemAdapterMapping, FileSystemAdapterWriteDirectory, FileSystemAdapterCache) {
-    var FileSystemAdapter, broadcastNotFound, createRecord, deleteRecord, deserialize, deserializeRecord, findAll, findBy, findById, findByIds, findQuery, loadHasMany, save, saveRecord, serialize, serializeRecord;
+    var FileSystemAdapter, broadcastNotFound, deleteRecord, deserialize, deserializeRecord, findAll, findBy, findById, findByIds, findQuery, loadHasMany, save, saveRecord, serialize, serializeRecord;
     broadcastNotFound = function(error, type) {
       $rootScope.$emit('store.file_system.not_found', type);
       return 'not_found';
@@ -220,9 +220,42 @@
       });
       return deferred.promise;
     };
-    createRecord = function(type, record) {};
-    deleteRecord = function(type, record) {};
-    saveRecord = function(type, record) {
+    deleteRecord = function(type, record, keys) {
+      var deferred, findAllSuccess;
+      deferred = $q.defer();
+      return findAll(type).then(findAllSuccess = function(currentRecords) {
+        var foundRecord, newRecords;
+        foundRecord = false;
+        newRecords = deserialize(currentRecords, type);
+        if (currentRecords.length > 0) {
+          return angular.forEach(currentRecords, function(currentRecord, index) {
+            var foundWithKey;
+            if (keys) {
+              if (Array.isArray(keys)) {
+                foundWithKey = false;
+                angular.forEach(keys, function(key) {
+                  if (record[key] !== currentRecord[key]) {
+                    return foundWithKey = false;
+                  }
+                });
+                if (!foundWithKey) {
+                  foundRecord = true;
+                  return delete newRecords[index];
+                }
+              } else {
+
+              }
+            } else {
+              if (angular.isDefined(currentRecord.id) && (record != null ? record.id : void 0) === currentRecord.id) {
+                delete newRecords[index];
+                return foundRecord = true;
+              }
+            }
+          });
+        }
+      });
+    };
+    saveRecord = function(type, record, keys) {
       var deferred, findAllError, findAllSuccess;
       deferred = $q.defer();
       findAll(type).then(findAllSuccess = function(currentRecords) {
@@ -231,9 +264,27 @@
         newRecords = deserialize(currentRecords, type);
         if (currentRecords.length > 0) {
           angular.forEach(currentRecords, function(currentRecord, index) {
-            if (angular.isDefined(currentRecord.id) && (record != null ? record.id : void 0) === currentRecord.id) {
-              newRecords[index] = record;
-              return foundRecord = true;
+            var foundWithKey;
+            if (keys) {
+              if (Array.isArray(keys)) {
+                foundWithKey = false;
+                angular.forEach(keys, function(key) {
+                  if (record[key] !== currentRecord[key]) {
+                    return foundWithKey = false;
+                  }
+                });
+                if (!foundWithKey) {
+                  foundRecord = true;
+                  return newRecords[index] = record;
+                }
+              } else {
+
+              }
+            } else {
+              if (angular.isDefined(currentRecord.id) && (record != null ? record.id : void 0) === currentRecord.id) {
+                newRecords[index] = record;
+                return foundRecord = true;
+              }
             }
           });
         }
@@ -243,7 +294,7 @@
         return save(record.type, newRecords).then(saveSuccess = function() {
           return deferred.resolve(record);
         });
-      }, findAllError = function() {
+      }, findAllError = function(error) {
         var saveSuccess;
         return save(record.type, [record]).then(saveSuccess = function() {
           return deferred.resolve(record);
@@ -339,16 +390,12 @@
         return findBy(type, propertyName, value);
       };
 
-      FileSystemAdapter.prototype.createRecord = function(type, record) {
-        return createRecord(type, record);
+      FileSystemAdapter.prototype.deleteRecord = function(type, record, keys) {
+        return deleteRecord(type, record, keys);
       };
 
-      FileSystemAdapter.prototype.deleteRecord = function(type, record) {
-        return deleteRecord(type, record);
-      };
-
-      FileSystemAdapter.prototype.saveRecord = function(type, record) {
-        return saveRecord(type, record);
+      FileSystemAdapter.prototype.saveRecord = function(type, record, keys) {
+        return saveRecord(type, record, keys);
       };
 
       FileSystemAdapter.prototype.save = function(type, records) {
@@ -870,11 +917,11 @@
       service.createRecord = function(type, record) {
         return adapter.createRecord(type, record);
       };
-      service.deleteRecord = function(type, record) {
-        return adapter.deleteRecord(type, record);
+      service.deleteRecord = function(record, keys) {
+        return adapter.deleteRecord(record.type, record, keys);
       };
-      service.saveRecord = function(record) {
-        return adapter.saveRecord(record.type, record);
+      service.saveRecord = function(record, keys) {
+        return adapter.saveRecord(record.type, record, keys);
       };
       return service;
     };

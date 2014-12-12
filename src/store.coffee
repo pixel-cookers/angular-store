@@ -172,12 +172,11 @@ angular
       service.createRecord = (type, record) ->
         adapter.createRecord(type, record)
 
-      # TODO: remove the type parameter since we can get it from the record
-      service.deleteRecord = (type, record) ->
-        adapter.deleteRecord(type, record)
+      service.deleteRecord = (record, keys) ->
+        adapter.deleteRecord(record.type, record, keys)
 
-      service.saveRecord = (record) ->
-        adapter.saveRecord(record.type, record)
+      service.saveRecord = (record, keys) ->
+        adapter.saveRecord(record.type, record, keys)
 
       service
 

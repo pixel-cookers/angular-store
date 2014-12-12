@@ -180,16 +180,8 @@ angular
 
       deferred.promise
 
-    # Create a record
-    createRecord = (type, record) ->
-      # TODO: createRecord
-
     # Delete a record
-    deleteRecord = (type, record) ->
-      # TODO: deleteRecord
-
-    # Save a record
-    saveRecord = (type, record) ->
+    deleteRecord = (type, record, keys) ->
       deferred = $q.defer()
 
       # some records were found
@@ -199,9 +191,60 @@ angular
 
         if currentRecords.length > 0
           angular.forEach currentRecords, (currentRecord, index) ->
-            if angular.isDefined(currentRecord.id) and record?.id is currentRecord.id
-              newRecords[index] = record
-              foundRecord = true
+            # if we keys to use to find the record
+            if keys
+              if Array.isArray(keys)
+                foundWithKey = false
+
+                angular.forEach keys, (key) ->
+                  if record[key] isnt currentRecord[key]
+                    foundWithKey = false
+
+                unless foundWithKey
+                  foundRecord = true
+                  delete newRecords[index]
+
+              else
+                # TODO: handle the case were keys is just a single value ?
+
+            # if we don't, use the id attribute
+            else
+              if angular.isDefined(currentRecord.id) and record?.id is currentRecord.id
+                delete newRecords[index]
+                foundRecord = true
+
+    # Save a record
+    saveRecord = (type, record, keys) ->
+      deferred = $q.defer()
+
+      # some records were found
+      findAll(type).then findAllSuccess = (currentRecords) ->
+        foundRecord = false
+        newRecords = deserialize(currentRecords, type)
+
+        if currentRecords.length > 0
+          angular.forEach currentRecords, (currentRecord, index) ->
+            # if we keys to use to find the record
+            if keys
+              if Array.isArray(keys)
+                foundWithKey = false
+
+                angular.forEach keys, (key) ->
+                  if record[key] isnt currentRecord[key]
+                    foundWithKey = false
+
+                unless foundWithKey
+                  foundRecord = true
+                  newRecords[index] = record
+
+              else
+                # TODO: handle the case were keys is just a single value ?
+
+            # if we don't, use the id attribute
+            else
+              if angular.isDefined(currentRecord.id) and record?.id is currentRecord.id
+                newRecords[index] = record
+                foundRecord = true
 
         unless foundRecord
           newRecords.push record
@@ -210,7 +253,7 @@ angular
           deferred.resolve(record)
 
       # no records found or error
-      , findAllError = ->
+      , findAllError = (error) ->
         save(record.type, [record]).then saveSuccess = ->
           deferred.resolve(record)
 
@@ -299,11 +342,9 @@ angular
         findById(type, id)
       findBy: (type, propertyName, value) ->
         findBy(type, propertyName, value)
-      createRecord: (type, record) ->
-        createRecord(type, record)
-      deleteRecord: (type, record) ->
-        deleteRecord(type, record)
-      saveRecord: (type, record) ->
-        saveRecord(type, record)
+      deleteRecord: (type, record, keys) ->
+        deleteRecord(type, record, keys)
+      saveRecord: (type, record, keys) ->
+        saveRecord(type, record, keys)
       save: (type, records) ->
         save(type, records)
