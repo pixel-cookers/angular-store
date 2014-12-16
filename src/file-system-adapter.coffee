@@ -278,6 +278,7 @@ angular
         destination = "#{relativePath}resources/#{pluralizedType}.json"
 
         $cordovaFile.writeFile(destination, jsonRecords, writeFileOptions).then createFileSuccess = (result) ->
+          FileSystemAdapterCache.pop()
           deferred.resolve(records)
 
         , createFileError = (error) ->
@@ -301,10 +302,10 @@ angular
       for key, value of record
         if angular.isFunction(value)
           delete record[key]
-
         else
-          record[_.str.underscored(key)] = value
-          delete record[key]
+          underscoredKey = _.str.underscored(key)
+          record[underscoredKey] = value
+          delete record[key] if key != underscoredKey
 
       record
 

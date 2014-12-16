@@ -178,7 +178,10 @@ angular
       service.saveRecord = (record, keys) ->
         adapter.saveRecord(record.type, record, keys)
 
-      service
+      service.save = (type, records) ->
+        adapter.save(type, records)
+
+      return service
 
     @$get = ($injector, $q) ->
       createService($injector, $q, configuration)

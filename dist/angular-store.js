@@ -317,6 +317,7 @@
         relativePath = result.fullPath.substring(1);
         destination = "" + relativePath + "resources/" + pluralizedType + ".json";
         return $cordovaFile.writeFile(destination, jsonRecords, writeFileOptions).then(createFileSuccess = function(result) {
+          FileSystemAdapterCache.pop();
           return deferred.resolve(records);
         }, createFileError = function(error) {
           return deferred.reject('could_not_write_file');
@@ -335,14 +336,17 @@
       return serializeRecord(records);
     };
     serializeRecord = function(record) {
-      var key, value;
+      var key, underscoredKey, value;
       for (key in record) {
         value = record[key];
         if (angular.isFunction(value)) {
           delete record[key];
         } else {
-          record[_.str.underscored(key)] = value;
-          delete record[key];
+          underscoredKey = _.str.underscored(key);
+          record[underscoredKey] = value;
+          if (key !== underscoredKey) {
+            delete record[key];
+          }
         }
       }
       return record;
@@ -922,6 +926,9 @@
       };
       service.saveRecord = function(record, keys) {
         return adapter.saveRecord(record.type, record, keys);
+      };
+      service.save = function(type, records) {
+        return adapter.save(type, records);
       };
       return service;
     };
