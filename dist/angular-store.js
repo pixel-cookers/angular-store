@@ -223,12 +223,12 @@
     deleteRecord = function(type, record, keys) {
       var deferred, findAllSuccess;
       deferred = $q.defer();
-      return findAll(type).then(findAllSuccess = function(currentRecords) {
-        var foundRecord, newRecords;
+      findAll(type).then(findAllSuccess = function(currentRecords) {
+        var foundRecord, newRecords, saveSuccess;
         foundRecord = false;
         newRecords = deserialize(currentRecords, type);
         if (currentRecords.length > 0) {
-          return angular.forEach(currentRecords, function(currentRecord, index) {
+          _.remove(newRecords, function(currentRecord) {
             var foundWithKey;
             if (keys) {
               if (Array.isArray(keys)) {
@@ -240,20 +240,29 @@
                 });
                 if (!foundWithKey) {
                   foundRecord = true;
-                  return delete newRecords[index];
+                  return true;
                 }
               } else {
 
               }
             } else {
               if (angular.isDefined(currentRecord.id) && (record != null ? record.id : void 0) === currentRecord.id) {
-                delete newRecords[index];
-                return foundRecord = true;
+                foundRecord = true;
+                return true;
               }
             }
+            return false;
           });
+          if (foundRecord) {
+            return save(type, newRecords).then(saveSuccess = function(result) {
+              return deferred.resolve(true);
+            });
+          } else {
+            return deferred.resolve(false);
+          }
         }
       });
+      return deferred.promise;
     };
     saveRecord = function(type, record, keys) {
       var deferred, findAllError, findAllSuccess;

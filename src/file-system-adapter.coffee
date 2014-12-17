@@ -190,7 +190,8 @@ angular
         newRecords = deserialize(currentRecords, type)
 
         if currentRecords.length > 0
-          angular.forEach currentRecords, (currentRecord, index) ->
+
+          _.remove newRecords, (currentRecord) ->
             # if we keys to use to find the record
             if keys
               if Array.isArray(keys)
@@ -202,16 +203,26 @@ angular
 
                 unless foundWithKey
                   foundRecord = true
-                  delete newRecords[index]
+                  return true
 
               else
                 # TODO: handle the case were keys is just a single value ?
 
-            # if we don't, use the id attribute
+                # if we don't, use the id attribute
             else
               if angular.isDefined(currentRecord.id) and record?.id is currentRecord.id
-                delete newRecords[index]
                 foundRecord = true
+                return true
+            return false
+
+          if foundRecord
+            # we deleted an item we need to persist the new collection
+            save(type, newRecords).then saveSuccess = (result) ->
+              deferred.resolve(true)
+          else
+            deferred.resolve(false)
+
+      deferred.promise
 
     # Save a record
     saveRecord = (type, record, keys) ->
@@ -270,7 +281,7 @@ angular
       jsonRecords[pluralizedType] = serialize(records)
       jsonRecords = JSON.stringify(jsonRecords)
 
-      # TODO: make sure this does not crash the application when outside or a
+      # TODO: make sure this does not crash the application when outside a
       #       cordova application :s
       resolveLocalFileSystemURL FileSystemAdapterWriteDirectory, (result) ->
         # dirty trick to get relative path in cordova...
