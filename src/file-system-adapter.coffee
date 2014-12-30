@@ -137,6 +137,11 @@ angular
           addPromise = true
           pluralizedPropertyName = pluralize(propertyName.replace('_ids', ''))
 
+          # dirty hack for embedded stakes
+          if pluralizedPropertyName == 'stakes' and type == 'reference'
+            record[pluralizedPropertyName] = deserialize(record[pluralizedPropertyName], 'stake')
+            addPromise = false
+
           # hack to make sure that attachment_ids load media instead of attachments
           angular.forEach FileSystemAdapterMapping, (mapping) ->
             if pluralizedPropertyName is mapping.from
@@ -287,15 +292,18 @@ angular
         # dirty trick to get relative path in cordova...
         relativePath = result.fullPath.substring(1)
         destination = "#{relativePath}resources/#{pluralizedType}.json"
+#        console.debug 'SaveFileTo', result.fullPath, 'dst', destination
 
         $cordovaFile.writeFile(destination, jsonRecords, writeFileOptions).then createFileSuccess = (result) ->
           FileSystemAdapterCache.pop()
           deferred.resolve(records)
 
         , createFileError = (error) ->
+          console.error 'could_not_write_file', error
           deferred.reject('could_not_write_file')
 
       , (error) ->
+        console.error 'could_not_open_directory', error
         deferred.reject('could_not_open_directory')
 
       deferred.promise

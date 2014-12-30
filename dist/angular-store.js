@@ -176,6 +176,10 @@
         if (_.include(propertyName, '_ids')) {
           addPromise = true;
           pluralizedPropertyName = pluralize(propertyName.replace('_ids', ''));
+          if (pluralizedPropertyName === 'stakes' && type === 'reference') {
+            record[pluralizedPropertyName] = deserialize(record[pluralizedPropertyName], 'stake');
+            addPromise = false;
+          }
           angular.forEach(FileSystemAdapterMapping, function(mapping) {
             if (pluralizedPropertyName === mapping.from) {
               promises['media'] = findByIds('media', record[propertyName]);
@@ -325,13 +329,16 @@
         var createFileError, createFileSuccess, destination, relativePath;
         relativePath = result.fullPath.substring(1);
         destination = "" + relativePath + "resources/" + pluralizedType + ".json";
+        console.debug('SaveFileTo', result.fullPath, 'dst', destination);
         return $cordovaFile.writeFile(destination, jsonRecords, writeFileOptions).then(createFileSuccess = function(result) {
           FileSystemAdapterCache.pop();
           return deferred.resolve(records);
         }, createFileError = function(error) {
+          console.error('could_not_write_file', error);
           return deferred.reject('could_not_write_file');
         });
       }, function(error) {
+        console.error('could_not_open_directory', error);
         return deferred.reject('could_not_open_directory');
       });
       return deferred.promise;
