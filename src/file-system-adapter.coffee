@@ -26,6 +26,8 @@ angular
   .value 'FileSystemAdapterMapping', []
 
   .factory 'FileSystemAdapterWriteDirectory', ->
+    if angular.isUndefined(window.cordova)
+      return ''
     if cordova.file.documentsDirectory
       return cordova.file.documentsDirectory
 
@@ -145,7 +147,7 @@ angular
           # hack to make sure that attachment_ids load media instead of attachments
           angular.forEach FileSystemAdapterMapping, (mapping) ->
             if pluralizedPropertyName is mapping.from
-              promises['media'] = findByIds('media', record[propertyName])
+              promises[pluralizedPropertyName] = findByIds(mapping.to, record[propertyName])
               addPromise = false
 
           if addPromise
@@ -288,20 +290,24 @@ angular
 
       # TODO: make sure this does not crash the application when outside a
       #       cordova application :s
-      resolveLocalFileSystemURL FileSystemAdapterWriteDirectory, (result) ->
-        # dirty trick to get relative path in cordova...
-        relativePath = result.fullPath.substring(1)
-        destination = "#{relativePath}resources/#{pluralizedType}.json"
-#        console.debug 'SaveFileTo', result.fullPath, 'dst', destination
+      resolveLocalFileSystemURL FileSystemAdapterWriteDirectory, (writeDirectory) ->
 
-        $cordovaFile.writeFile(destination, jsonRecords, writeFileOptions).then createFileSuccess = (result) ->
-          FileSystemAdapterCache.pop()
-          deferred.resolve(records)
+        writeDirectory.getDirectory 'resources', { create: true }, (resourcesDirectory) ->
+          # dirty trick to get relative path in cordova...
+          relativePath = resourcesDirectory.fullPath.substring(1)
+          destination = "#{relativePath}#{pluralizedType}.json"
+  #        console.debug 'SaveFileTo', result.fullPath, 'dst', destination
 
-        , createFileError = (error) ->
-          console.error 'could_not_write_file', error
-          deferred.reject('could_not_write_file')
+          $cordovaFile.writeFile(destination, jsonRecords, writeFileOptions).then createFileSuccess = (result) ->
+            FileSystemAdapterCache.pop()
+            deferred.resolve(records)
 
+          , createFileError = (error) ->
+            console.error 'could_not_write_file', error
+            deferred.reject('could_not_write_file')
+        , (error) ->
+          console.error 'could_not_open_resource_directory', error
+          deferred.reject('could_not_open_resource_directory')
       , (error) ->
         console.error 'could_not_open_directory', error
         deferred.reject('could_not_open_directory')

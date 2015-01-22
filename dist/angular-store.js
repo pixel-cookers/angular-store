@@ -89,6 +89,9 @@
   angular.module('store.fileSystem', ['store.fileSystem.core', 'store.fileSystem.restangular']);
 
   angular.module('store.fileSystem.core', ['store.fileSystem.restangular', 'store.fileSystem.adapterCache', 'ngCordova.plugins.file', 'store.core.sanitizeRestangularOne']).value('FileSystemAdapterMapping', []).factory('FileSystemAdapterWriteDirectory', function() {
+    if (angular.isUndefined(window.cordova)) {
+      return '';
+    }
     if (cordova.file.documentsDirectory) {
       return cordova.file.documentsDirectory;
     }
@@ -182,7 +185,7 @@
           }
           angular.forEach(FileSystemAdapterMapping, function(mapping) {
             if (pluralizedPropertyName === mapping.from) {
-              promises['media'] = findByIds('media', record[propertyName]);
+              promises[pluralizedPropertyName] = findByIds(mapping.to, record[propertyName]);
               return addPromise = false;
             }
           });
@@ -325,17 +328,23 @@
       jsonRecords = {};
       jsonRecords[pluralizedType] = serialize(records);
       jsonRecords = JSON.stringify(jsonRecords);
-      resolveLocalFileSystemURL(FileSystemAdapterWriteDirectory, function(result) {
-        var createFileError, createFileSuccess, destination, relativePath;
-        relativePath = result.fullPath.substring(1);
-        destination = "" + relativePath + "resources/" + pluralizedType + ".json";
-        console.debug('SaveFileTo', result.fullPath, 'dst', destination);
-        return $cordovaFile.writeFile(destination, jsonRecords, writeFileOptions).then(createFileSuccess = function(result) {
-          FileSystemAdapterCache.pop();
-          return deferred.resolve(records);
-        }, createFileError = function(error) {
-          console.error('could_not_write_file', error);
-          return deferred.reject('could_not_write_file');
+      resolveLocalFileSystemURL(FileSystemAdapterWriteDirectory, function(writeDirectory) {
+        return writeDirectory.getDirectory('resources', {
+          create: true
+        }, function(resourcesDirectory) {
+          var createFileError, createFileSuccess, destination, relativePath;
+          relativePath = resourcesDirectory.fullPath.substring(1);
+          destination = "" + relativePath + pluralizedType + ".json";
+          return $cordovaFile.writeFile(destination, jsonRecords, writeFileOptions).then(createFileSuccess = function(result) {
+            FileSystemAdapterCache.pop();
+            return deferred.resolve(records);
+          }, createFileError = function(error) {
+            console.error('could_not_write_file', error);
+            return deferred.reject('could_not_write_file');
+          });
+        }, function(error) {
+          console.error('could_not_open_resource_directory', error);
+          return deferred.reject('could_not_open_resource_directory');
         });
       }, function(error) {
         console.error('could_not_open_directory', error);
