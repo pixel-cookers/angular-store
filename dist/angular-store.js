@@ -88,7 +88,7 @@
    */
   angular.module('store.fileSystem', ['store.fileSystem.core', 'store.fileSystem.restangular']);
 
-  angular.module('store.fileSystem.core', ['store.fileSystem.restangular', 'store.fileSystem.adapterCache', 'ngCordova.plugins.file', 'store.core.sanitizeRestangularOne']).value('FileSystemAdapterMapping', []).factory('FileSystemAdapterWriteDirectory', function() {
+  angular.module('store.fileSystem.core', ['store.fileSystem.restangular', 'store.fileSystem.adapterCache', 'ngCordova.plugins.file']).value('FileSystemAdapterMapping', []).factory('FileSystemAdapterWriteDirectory', function() {
     if (angular.isUndefined(window.cordova)) {
       return '';
     }
@@ -96,36 +96,47 @@
       return cordova.file.documentsDirectory;
     }
     return cordova.file.externalApplicationStorageDirectory;
-  }).factory('FileSystemAdapter', function($rootScope, $q, $injector, $cordovaFile, sanitizeRestangularOne, FileSystemAdapterRestangular, FileSystemAdapterMapping, FileSystemAdapterWriteDirectory, FileSystemAdapterCache) {
-    var FileSystemAdapter, broadcastNotFound, deleteRecord, deserialize, deserializeRecord, findAll, findBy, findById, findByIds, findQuery, loadHasMany, save, saveRecord, serialize, serializeRecord;
+  }).factory('FileSystemAdapter', function($rootScope, $http, $q, $injector, $cordovaFile, FileSystemAdapterRestangular, FileSystemAdapterMapping, FileSystemAdapterWriteDirectory, FileSystemAdapterCache) {
+    var FileSystemAdapter, broadcastNotFound, deleteRecord, deserialize, deserializeRecord, find, findAll, findBy, findById, findByIds, findQuery, loadHasMany, save, saveRecord, serialize, serializeRecord;
     broadcastNotFound = function(error, type) {
       $rootScope.$emit('store.file_system.not_found', type);
       return 'not_found';
     };
-    findAll = function(type, subResourceName) {
-      var deferred, findAllError, findAllSuccess, promises;
+    find = function(type) {
+      var deferred, findAllError, suffix, url, _ref;
       deferred = $q.defer();
-      promises = [];
-      if (subResourceName) {
-        FileSystemAdapterRestangular.all(pluralize(type)).all(subResourceName).getList(FileSystemAdapterCache.getAsParam()).then(findAllSuccess = function(records) {
-          return deferred.resolve(deserialize(records, type));
-        }, findAllError = function(error) {
-          return deferred.reject(broadcastNotFound(error, type));
-        });
-      } else {
-        FileSystemAdapterRestangular.all(pluralize(type)).getList(FileSystemAdapterCache.getAsParam()).then(findAllSuccess = function(records) {
-          return deferred.resolve(deserialize(records, type));
-        }, findAllError = function(error) {
-          return deferred.reject(broadcastNotFound(error, type));
-        });
-      }
+      suffix = ((_ref = FileSystemAdapterRestangular.configuration) != null ? _ref.suffix : void 0) ? FileSystemAdapterRestangular.configuration.suffix : "";
+      url = FileSystemAdapterRestangular.all(pluralize(type)).getRestangularUrl() + suffix;
+      $http.get(url, {
+        cache: true,
+        params: FileSystemAdapterCache.getAsParam()
+      }).success(function(data) {
+        return deferred.resolve(data);
+      }).error(findAllError = function(error) {
+        return deferred.reject(error);
+      });
+      return deferred.promise;
+    };
+    findAll = function(type, subResourceName) {
+      var deferred, findAllError;
+      deferred = $q.defer();
+      find(type).then(function(data) {
+        if (subResourceName === 'originalData') {
+          return deferred.resolve(data);
+        } else {
+          return deferred.resolve(deserialize(data[pluralize(type)], type));
+        }
+      }, findAllError = function(error) {
+        return deferred.reject(broadcastNotFound(error, type));
+      });
       return deferred.promise;
     };
     findQuery = function(type, query) {
       var deferred;
       deferred = $q.defer();
-      FileSystemAdapterRestangular.all(pluralize(type)).getList(FileSystemAdapterCache.getAsParam()).then(function(records) {
-        records = _.filter(records, query);
+      find(type).then(function(data) {
+        var records;
+        records = _.filter(data[pluralize(type)], query);
         if (records) {
           return deferred.resolve(records);
         } else {
@@ -140,8 +151,8 @@
       var deferred, record;
       deferred = $q.defer();
       record = null;
-      FileSystemAdapterRestangular.all(pluralize(type)).getList(FileSystemAdapterCache.getAsParam()).then(function(records) {
-        record = _.find(records, {
+      find(type).then(function(data) {
+        record = _.find(data[pluralize(type)], {
           id: id
         });
         if (record) {
@@ -152,17 +163,16 @@
           return deferred.reject('not_found');
         }
       }, function(error) {
-        return deferred.reject(broadcastNotFound(error, type));
+        return deferred.reject('not_found');
       });
       return deferred.promise;
     };
     findByIds = function(type, ids) {
-      var deferred, modelName, records;
-      modelName = _.str.classify(type) + 'Model';
+      var deferred;
       deferred = $q.defer();
-      records = [];
-      FileSystemAdapterRestangular.all(pluralize(type)).getList(FileSystemAdapterCache.getAsParam()).then(function(records) {
-        records = _.where(records, function(record) {
+      find(type).then(function(data) {
+        var records;
+        records = _.where(data[pluralize(type)], function(record) {
           return _.contains(ids, record.id);
         });
         return deferred.resolve(records);
@@ -175,7 +185,7 @@
       var addPromise, deferred, pluralizedPropertyName, promises, propertyName;
       deferred = $q.defer();
       promises = {};
-      for (propertyName in sanitizeRestangularOne(record)) {
+      for (propertyName in record) {
         if (_.include(propertyName, '_ids')) {
           addPromise = true;
           pluralizedPropertyName = pluralize(propertyName.replace('_ids', ''));
@@ -206,8 +216,9 @@
     findBy = function(type, propertyName, value) {
       var deferred;
       deferred = $q.defer();
-      FileSystemAdapterRestangular.all(pluralize(type)).getList(FileSystemAdapterCache.getAsParam()).then(function(records) {
-        var record;
+      find(type).then(function(data) {
+        var record, records;
+        records = data[pluralize(type)];
         if (value instanceof Array) {
           record = _.find(records, function(filterRecord) {
             return _.isEqual(filterRecord[propertyName], value);
@@ -231,11 +242,10 @@
       var deferred, findAllSuccess;
       deferred = $q.defer();
       findAll(type).then(findAllSuccess = function(currentRecords) {
-        var foundRecord, newRecords, saveSuccess;
+        var foundRecord, saveSuccess;
         foundRecord = false;
-        newRecords = deserialize(currentRecords, type);
         if (currentRecords.length > 0) {
-          _.remove(newRecords, function(currentRecord) {
+          _.remove(currentRecords, function(currentRecord) {
             var foundWithKey;
             if (keys) {
               if (Array.isArray(keys)) {
@@ -261,7 +271,7 @@
             return false;
           });
           if (foundRecord) {
-            return save(type, newRecords).then(saveSuccess = function(result) {
+            return save(type, currentRecords).then(saveSuccess = function(result) {
               return deferred.resolve(true);
             });
           } else {
@@ -277,7 +287,7 @@
       findAll(type).then(findAllSuccess = function(currentRecords) {
         var foundRecord, newRecords, saveSuccess;
         foundRecord = false;
-        newRecords = deserialize(currentRecords, type);
+        newRecords = angular.copy(currentRecords);
         if (currentRecords.length > 0) {
           angular.forEach(currentRecords, function(currentRecord, index) {
             var foundWithKey;

@@ -20,7 +20,6 @@ angular
     'store.fileSystem.restangular'
     'store.fileSystem.adapterCache'
     'ngCordova.plugins.file'
-    'store.core.sanitizeRestangularOne'
   ])
 
   .value 'FileSystemAdapterMapping', []
@@ -34,37 +33,39 @@ angular
     cordova.file.externalApplicationStorageDirectory
 
   # TODO: inject pluralize and lodash
-  .factory 'FileSystemAdapter', ($rootScope, $q, $injector, $cordovaFile, sanitizeRestangularOne, FileSystemAdapterRestangular, FileSystemAdapterMapping, FileSystemAdapterWriteDirectory, FileSystemAdapterCache) ->
+  .factory 'FileSystemAdapter', ($rootScope, $http, $q, $injector, $cordovaFile, FileSystemAdapterRestangular, FileSystemAdapterMapping, FileSystemAdapterWriteDirectory, FileSystemAdapterCache) ->
 
     broadcastNotFound = (error, type) ->
       $rootScope.$emit 'store.file_system.not_found', type
       'not_found'
 
+    find = (type) ->
+      deferred = $q.defer()
+
+      suffix = if FileSystemAdapterRestangular.configuration?.suffix then FileSystemAdapterRestangular.configuration.suffix else ""
+      url = FileSystemAdapterRestangular.all(pluralize(type)).getRestangularUrl() + suffix
+
+      $http.get(url, {
+        cache: true,
+        params: FileSystemAdapterCache.getAsParam()
+      }).success (data) ->
+        deferred.resolve(data)
+      .error findAllError = (error) ->
+        deferred.reject(error)
+
+      deferred.promise
+
     # Return an array of all the records
     findAll = (type, subResourceName) ->
       deferred = $q.defer()
-      promises = []
 
-      if subResourceName
-        FileSystemAdapterRestangular
-          .all(pluralize(type))
-          .all(subResourceName)
-          .getList(FileSystemAdapterCache.getAsParam())
-          .then findAllSuccess = (records) ->
-            deferred.resolve(deserialize(records, type))
-
-          , findAllError = (error) ->
-            deferred.reject(broadcastNotFound(error, type))
-
-      else
-        FileSystemAdapterRestangular
-          .all(pluralize(type))
-          .getList(FileSystemAdapterCache.getAsParam())
-          .then findAllSuccess = (records) ->
-            deferred.resolve(deserialize(records, type))
-
-          , findAllError = (error) ->
-            deferred.reject(broadcastNotFound(error, type))
+      find(type).then (data) ->
+        if subResourceName == 'originalData'
+          deferred.resolve(data)
+        else
+          deferred.resolve(deserialize(data[pluralize(type)], type))
+      , findAllError = (error) ->
+        deferred.reject(broadcastNotFound(error, type))
 
       deferred.promise
 
@@ -72,11 +73,9 @@ angular
     findQuery = (type, query) ->
       deferred = $q.defer()
 
-      FileSystemAdapterRestangular
-        .all(pluralize(type))
-        .getList(FileSystemAdapterCache.getAsParam())
-        .then (records) ->
-          records = _.filter(records, query)
+      find(type)
+        .then (data) ->
+          records = _.filter(data[pluralize(type)], query)
 
           if records
             deferred.resolve(records)
@@ -93,34 +92,26 @@ angular
       deferred = $q.defer()
       record = null
 
-      FileSystemAdapterRestangular
-        .all(pluralize(type))
-        .getList(FileSystemAdapterCache.getAsParam())
-        .then (records) ->
-          record = _.find(records, { id: id })
+      find(type).then (data) ->
+        record = _.find(data[pluralize(type)], {id: id})
+        if record
+          loadHasMany(record, type).then (record) ->
+            deferred.resolve(record)
+        else
+          deferred.reject('not_found')
 
-          if record
-            loadHasMany(record, type).then (record) ->
-              deferred.resolve(record)
-          else
-            deferred.reject('not_found')
-
-        , (error) ->
-          deferred.reject(broadcastNotFound(error, type))
+      , (error) ->
+        deferred.reject('not_found')
 
       deferred.promise
 
     # Return an array of records filtered by id
     findByIds = (type, ids) ->
-      modelName = _.str.classify(type) + 'Model'
       deferred = $q.defer()
-      records = []
 
-      FileSystemAdapterRestangular
-        .all(pluralize(type))
-        .getList(FileSystemAdapterCache.getAsParam())
-        .then (records) ->
-          records = _.where records, (record) ->
+      find(type)
+        .then (data) ->
+          records = _.where data[pluralize(type)], (record) ->
             _.contains(ids, record.id)
 
           deferred.resolve(records)
@@ -134,7 +125,7 @@ angular
       deferred = $q.defer()
       promises = {}
 
-      for propertyName of sanitizeRestangularOne(record)
+      for propertyName of record
         if _.include(propertyName, '_ids')
           addPromise = true
           pluralizedPropertyName = pluralize(propertyName.replace('_ids', ''))
@@ -148,6 +139,7 @@ angular
           angular.forEach FileSystemAdapterMapping, (mapping) ->
             if pluralizedPropertyName is mapping.from
               promises[pluralizedPropertyName] = findByIds(mapping.to, record[propertyName])
+#              promises[pluralizedPropertyName] = []
               addPromise = false
 
           if addPromise
@@ -165,10 +157,9 @@ angular
     findBy = (type, propertyName, value) ->
       deferred = $q.defer()
 
-      FileSystemAdapterRestangular
-        .all(pluralize(type))
-        .getList(FileSystemAdapterCache.getAsParam())
-        .then (records) ->
+      find(type)
+        .then (data) ->
+          records = data[pluralize(type)]
           if value instanceof Array
             record = _.find records, (filterRecord) ->
               _.isEqual(filterRecord[propertyName], value)
@@ -194,11 +185,10 @@ angular
       # some records were found
       findAll(type).then findAllSuccess = (currentRecords) ->
         foundRecord = false
-        newRecords = deserialize(currentRecords, type)
 
         if currentRecords.length > 0
 
-          _.remove newRecords, (currentRecord) ->
+          _.remove currentRecords, (currentRecord) ->
             # if we keys to use to find the record
             if keys
               if Array.isArray(keys)
@@ -224,7 +214,7 @@ angular
 
           if foundRecord
             # we deleted an item we need to persist the new collection
-            save(type, newRecords).then saveSuccess = (result) ->
+            save(type, currentRecords).then saveSuccess = (result) ->
               deferred.resolve(true)
           else
             deferred.resolve(false)
@@ -238,7 +228,7 @@ angular
       # some records were found
       findAll(type).then findAllSuccess = (currentRecords) ->
         foundRecord = false
-        newRecords = deserialize(currentRecords, type)
+        newRecords = angular.copy(currentRecords)
 
         if currentRecords.length > 0
           angular.forEach currentRecords, (currentRecord, index) ->
@@ -296,7 +286,6 @@ angular
           # dirty trick to get relative path in cordova...
           relativePath = resourcesDirectory.fullPath.substring(1)
           destination = "#{relativePath}#{pluralizedType}.json"
-  #        console.debug 'SaveFileTo', result.fullPath, 'dst', destination
 
           $cordovaFile.writeFile(destination, jsonRecords, writeFileOptions).then createFileSuccess = (result) ->
             FileSystemAdapterCache.pop()
